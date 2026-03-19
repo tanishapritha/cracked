@@ -1,0 +1,84 @@
+export type Difficulty = "Easy" | "Medium" | "Hard";
+
+export type Topic =
+  | "arrays"
+  | "two-pointers"
+  | "sliding-window"
+  | "binary-search"
+  | "trees"
+  | "graphs"
+  | "dynamic-programming"
+  | "heaps"
+  | "backtracking"
+  | "tries"
+  | "stacks";
+
+export interface Problem {
+  slug: string;
+  title: string;
+  difficulty: Difficulty;
+  topics: Topic[];
+  lc_url: string;
+  description: string;
+  starter_code: {
+    python: string;
+    javascript: string;
+    java: string;
+  };
+  coach_context: string;
+}
+
+export type CoachStage = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface ChatMessage {
+  role: "coach" | "user";
+  content: string;
+}
+
+export interface Session {
+  id: string;
+  user_id: string;
+  problem_slug: string;
+  stage_reached: number;
+  hints_used: number;
+  duration_seconds: number;
+  solved: boolean;
+  created_at: string;
+}
+
+export interface SkillScore {
+  id: string;
+  user_id: string;
+  topic: Topic;
+  score: number;
+}
+
+export const TOPICS: Topic[] = [
+  "arrays",
+  "two-pointers",
+  "sliding-window",
+  "binary-search",
+  "trees",
+  "graphs",
+  "dynamic-programming",
+  "heaps",
+  "backtracking",
+  "tries",
+  "stacks",
+];
+
+export function getSkillLabel(score: number): string {
+  if (score <= 30) return "Weak";
+  if (score <= 55) return "Shaky";
+  if (score <= 75) return "Okay";
+  if (score <= 90) return "Good";
+  return "Strong";
+}
+
+export function getSkillColor(score: number): string {
+  if (score <= 30) return "#ef4444";
+  if (score <= 55) return "#f59e0b";
+  if (score <= 75) return "#eab308";
+  if (score <= 90) return "#84cc16";
+  return "#22c55e";
+}
