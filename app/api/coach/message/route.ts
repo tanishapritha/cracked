@@ -68,7 +68,7 @@ ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain tim
         "X-Title": "cracked",
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4-20250514",
+        model: "google/gemma-3-12b-it:free",
         messages: llmMessages,
         stream: true,
         max_tokens: 1024,

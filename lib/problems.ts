@@ -9,6 +9,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/two-sum/",
     description:
       "Given an array of integers and a target value, find two numbers that add up to the target. Return the indices of those two numbers. There is exactly one solution for each input.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def twoSum(nums: list[int], target: int) -> list[int]:
     # your code here
@@ -34,6 +36,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/valid-parentheses/",
     description:
       "Given a string containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string has valid (properly nested and matched) brackets.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def isValid(s: str) -> bool:
     # your code here
@@ -59,6 +63,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/binary-search/",
     description:
       "Given a sorted array of integers and a target value, return the index of the target if found. If not found, return -1. The array has distinct values.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def search(nums: list[int], target: int) -> int:
     # your code here
@@ -84,6 +90,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
     description:
       "Given an array where each element represents a stock price on that day, find the maximum profit from a single buy and sell. You must buy before you sell. Return 0 if no profit is possible.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def maxProfit(prices: list[int]) -> int:
     # your code here
@@ -108,7 +116,20 @@ export const problems: Problem[] = [
     topics: ["sliding-window"],
     lc_url: "https://leetcode.com/problems/maximum-subarray/",
     description:
-      "Find the contiguous subarray within an array of integers that has the largest sum. Return that sum. The array has at least one element.",
+      "Find the contiguous subarray within an array of integers that has the largest sum. Return that sum.",
+    examples: [
+      {
+        input: "nums = [-2,1,-3,4,-1,2,1,-5,4]",
+        output: "6",
+        explanation: "The subarray [4,-1,2,1] has the largest sum 6.",
+      },
+      { input: "nums = [1]", output: "1" },
+      { input: "nums = [5,4,-1,7,8]", output: "23" },
+    ],
+    constraints: [
+      "1 <= nums.length <= 10^5",
+      "-10^4 <= nums[i] <= 10^4",
+    ],
     starter_code: {
       python: `def maxSubArray(nums: list[int]) -> int:
     # your code here
@@ -134,6 +155,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/number-of-islands/",
     description:
       "Given a 2D grid of '1's (land) and '0's (water), count the number of distinct islands. An island is formed by connecting adjacent lands horizontally or vertically.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def numIslands(grid: list[list[str]]) -> int:
     # your code here
@@ -159,6 +182,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/coin-change/",
     description:
       "Given coin denominations and a target amount, find the minimum number of coins needed to make that amount. If it is not possible, return -1. You have infinite coins of each denomination.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def coinChange(coins: list[int], amount: int) -> int:
     # your code here
@@ -184,6 +209,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/lru-cache/",
     description:
       "Design a data structure that implements a Least Recently Used cache with O(1) get and put operations. When the cache exceeds capacity, evict the least recently used item.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `class LRUCache:
     def __init__(self, capacity: int):
@@ -236,6 +263,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/word-search/",
     description:
       "Given a 2D board of characters and a target word, determine if the word exists in the grid. The word can be constructed from sequentially adjacent cells (horizontal or vertical), and each cell may only be used once.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `def exist(board: list[list[str]], word: str) -> bool:
     # your code here
@@ -261,6 +290,8 @@ export const problems: Problem[] = [
     lc_url: "https://leetcode.com/problems/implement-trie-prefix-tree/",
     description:
       "Implement a trie that supports inserting words, searching for exact matches, and checking if any previously inserted word starts with a given prefix.",
+    examples: [],
+    constraints: [],
     starter_code: {
       python: `class Trie:
     def __init__(self):
@@ -317,6 +348,48 @@ export const problems: Problem[] = [
     },
     coach_context:
       "Each node has a map of children (char -> node) and an isEnd flag. Insert: walk/create nodes per character. Search vs startsWith: only difference is checking isEnd at the terminal node. Common mistake: confusing the two. O(L) for all operations where L = word length.",
+  },
+  {
+    slug: "assign-cookies",
+    title: "Assign Cookies",
+    difficulty: "Easy",
+    topics: ["arrays"],
+    lc_url: "https://leetcode.com/problems/assign-cookies/",
+    description:
+      "Assume you are an awesome parent and want to give your children some cookies. But, you should give each child at most one cookie.\\n\\nEach child i has a greed factor g[i], which is the minimum size of a cookie that the child will be content with; and each cookie j has a size s[j]. If s[j] >= g[i], we can assign the cookie j to the child i, and the child i will be content. Your goal is to maximize the number of your content children and output the maximum number.",
+    examples: [
+      {
+        input: "g = [1,2,3], s = [1,1]",
+        output: "1",
+        explanation: "You have 3 children and 2 cookies. The greed factors of 3 children are 1, 2, 3. Even though you have 2 cookies, since their size is both 1, you could only make the child whose greed factor is 1 content.",
+      },
+      {
+        input: "g = [1,2], s = [1,2,3]",
+        output: "2",
+        explanation: "You have 2 children and 3 cookies. The greed factors of 2 children are 1, 2. You have 3 cookies and their sizes are big enough to gratify all of the children. You need to output 2.",
+      },
+    ],
+    constraints: [
+      "1 <= g.length <= 3 * 10^4",
+      "0 <= s.length <= 3 * 10^4",
+      "1 <= g[i], s[j] <= 2^31 - 1",
+    ],
+    starter_code: {
+      python: `def findContentChildren(g: list[int], s: list[int]) -> int:
+    # your code here
+    pass`,
+      javascript: `function findContentChildren(g, s) {
+    // your code here
+}`,
+      java: `class Solution {
+    public int findContentChildren(int[] g, int[] s) {
+        // your code here
+        return 0;
+    }
+}`,
+    },
+    coach_context:
+      "Sorting + Two-pointer greedy approach. Sort both greed and cookie size arrays. Use two pointers to iterate. If the current cookie satisfies the current child, increment both. Otherwise, try the next larger cookie for the same child. O(n log n) due to sorting.",
   },
 ];
 

@@ -34,6 +34,93 @@ const difficultyColors: Record<string, string> = {
   Hard: "text-[#ef4444]",
 };
 
+function ProblemIntro({
+  problem,
+  onExplain,
+}: {
+  problem: any;
+  onExplain: () => void;
+}) {
+  return (
+    <div className="bg-[#141414] border border-[#1f1f1f] p-5 w-full space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-[#f5f5f5]">{problem.title}</h2>
+        <Badge
+          variant="outline"
+          className={`text-[10px] uppercase tracking-wider ${
+            difficultyColors[problem.difficulty]
+          } border-current/20`}
+        >
+          {problem.difficulty}
+        </Badge>
+      </div>
+
+      <div className="space-y-4">
+        <div className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
+          {problem.description}
+        </div>
+
+        {problem.examples && problem.examples.length > 0 && (
+          <div className="space-y-4">
+            {problem.examples.map((ex: any, i: number) => (
+              <div key={i} className="space-y-2">
+                <div className="text-[10px] font-bold text-[#737373] uppercase tracking-widest">
+                  Example {i + 1}
+                </div>
+                <div className="bg-[#0a0a0a] border border-[#1f1f1f] p-3 font-mono text-xs text-[#d4d4d4] space-y-1">
+                  <div>
+                    <span className="text-[#737373]">Input:</span> {ex.input}
+                  </div>
+                  <div>
+                    <span className="text-[#737373]">Output:</span> {ex.output}
+                  </div>
+                  {ex.explanation && (
+                    <div className="mt-2 pt-2 border-t border-[#1f1f1f] text-[#a3a3a3] italic">
+                      {ex.explanation}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {problem.constraints && problem.constraints.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[10px] font-bold text-[#737373] uppercase tracking-widest">
+              Constraints
+            </div>
+            <ul className="list-disc list-inside text-xs text-[#737373] space-y-1 font-mono">
+              {problem.constraints.map((c: string, i: number) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <div className="pt-4 border-t border-[#1f1f1f] flex items-center justify-between">
+        <a
+          href={problem.lc_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-[#737373] hover:text-[#84cc16] transition-colors"
+        >
+          View on LeetCode ↗
+        </a>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onExplain}
+          className="text-xs text-[#84cc16] hover:bg-[#84cc16]/10 h-7"
+        >
+          Explain problem
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function CoachPage() {
   const { slug } = useParams<{ slug: string }>();
   const problem = getProblemBySlug(slug);
@@ -77,7 +164,8 @@ export default function CoachPage() {
     if (problem && messages.length === 0) {
       const introMessage: ChatMessage = {
         role: "coach",
-        content: `Here's your problem: **${problem.title}** (${problem.difficulty})\n\nTopics: ${problem.topics.join(", ")}\n\n[Read the full problem on LeetCode](${problem.lc_url})\n\n${problem.description}\n\nTake a moment to read through it. When you're ready, I'll ask about your initial thinking.\n\n-- Alex`,
+        type: "problem-intro",
+        content: `I've loaded the problem for you. Let's start with a solid conceptual breakdown.`,
       };
       setMessages([introMessage]);
       setStage(2);
@@ -191,24 +279,17 @@ export default function CoachPage() {
 
     // record session
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        await fetch("/api/session/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            problem_slug: slug,
-            stage_reached: stage,
-            hints_used: hintsUsed,
-            duration_seconds: durationSeconds,
-            solved,
-          }),
-        });
-      }
+      await fetch("/api/session/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problem_slug: slug,
+          stage_reached: stage,
+          hints_used: hintsUsed,
+          duration_seconds: durationSeconds,
+          solved,
+        }),
+      });
     } catch (err) {
       console.error("Failed to save session:", err);
     }
@@ -265,15 +346,22 @@ export default function CoachPage() {
               key={i}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div
-                className={`max-w-[85%] px-4 py-2.5 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-[#84cc16]/10 text-[#f5f5f5] border border-[#84cc16]/20"
-                    : "bg-[#1f1f1f] text-[#f5f5f5] border border-[#1f1f1f]"
-                }`}
-              >
-                <div className="whitespace-pre-wrap">{msg.content}</div>
-              </div>
+              {msg.type === "problem-intro" ? (
+                <ProblemIntro
+                  problem={problem}
+                  onExplain={() => sendMessage("Can you explain this problem to me in simpler terms?")}
+                />
+              ) : (
+                <div
+                  className={`max-w-[85%] px-4 py-2.5 text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-[#84cc16]/10 text-[#f5f5f5] border border-[#84cc16]/20"
+                      : "bg-[#1f1f1f] text-[#f5f5f5] border border-[#1f1f1f]"
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                </div>
+              )}
             </div>
           ))}
           <div ref={chatEndRef} />

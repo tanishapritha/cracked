@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { problems } from "@/lib/problems";
 import { getSkillLabel, getSkillColor, TOPICS } from "@/lib/types";
 import Link from "next/link";
+import { LeetCodeConnect } from "@/components/leetcode-connect";
 
 export default async function DashboardPage() {
   const userId = "anonymous_user";
@@ -80,35 +81,42 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* skill bars */}
-      <div className="bg-[#141414] border border-[#1f1f1f] p-6 mb-8">
-        <h2 className="text-sm font-medium text-[#f5f5f5] mb-4">Skill map</h2>
-        <div className="space-y-3">
-          {(skills || []).map((skill: any) => (
-            <div key={skill.topic} className="flex items-center gap-3">
-              <span className="text-xs text-[#737373] w-32 text-right">
-                {skill.topic}
-              </span>
-              <div className="flex-1 h-2 bg-[#1f1f1f] overflow-hidden">
-                <div
-                  className="h-full transition-all duration-500"
-                  style={{
-                    width: `${skill.score}%`,
-                    backgroundColor: getSkillColor(skill.score),
-                  }}
-                />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        {/* skill bars */}
+        <div className="lg:col-span-2 bg-[#141414] border border-[#1f1f1f] p-6">
+          <h2 className="text-sm font-medium text-[#f5f5f5] mb-4">Skill map</h2>
+          <div className="space-y-3">
+            {(skills || []).map((skill: any) => (
+              <div key={skill.topic} className="flex items-center gap-3">
+                <span className="text-xs text-[#737373] w-32 text-right">
+                  {skill.topic}
+                </span>
+                <div className="flex-1 h-2 bg-[#1f1f1f] overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{
+                      width: `${skill.score}%`,
+                      backgroundColor: getSkillColor(skill.score),
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-xs w-12 text-right"
+                  style={{ color: getSkillColor(skill.score) }}
+                >
+                  {skill.score}
+                </span>
+                <span className="text-[10px] text-[#737373] w-12">
+                  {getSkillLabel(skill.score)}
+                </span>
               </div>
-              <span
-                className="text-xs w-12 text-right"
-                style={{ color: getSkillColor(skill.score) }}
-              >
-                {skill.score}
-              </span>
-              <span className="text-[10px] text-[#737373] w-12">
-                {getSkillLabel(skill.score)}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+
+        {/* leetcode connect */}
+        <div className="lg:col-span-1">
+          <LeetCodeConnect />
         </div>
       </div>
 

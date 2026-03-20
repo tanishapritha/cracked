@@ -20,6 +20,12 @@ export interface Problem {
   topics: Topic[];
   lc_url: string;
   description: string;
+  examples: {
+    input: string;
+    output: string;
+    explanation?: string;
+  }[];
+  constraints: string[];
   starter_code: {
     python: string;
     javascript: string;
@@ -33,6 +39,7 @@ export type CoachStage = 1 | 2 | 3 | 4 | 5 | 6;
 export interface ChatMessage {
   role: "coach" | "user";
   content: string;
+  type?: "problem-intro" | "text" | "hint";
 }
 
 export interface Session {
