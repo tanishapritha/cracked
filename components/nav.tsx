@@ -47,28 +47,10 @@ export function Nav() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <LogoutButton />
+            <span className="text-xs text-[#737373]">(Auth Disabled)</span>
           </div>
         </div>
       </div>
     </nav>
-  );
-}
-
-function LogoutButton() {
-  const handleLogout = async () => {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
-
-  return (
-    <button
-      onClick={handleLogout}
-      className="text-sm text-[#737373] hover:text-[#f5f5f5] transition-colors"
-    >
-      Sign out
-    </button>
   );
 }

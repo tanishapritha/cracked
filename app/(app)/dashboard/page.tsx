@@ -1,29 +1,33 @@
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { problems } from "@/lib/problems";
-import { getSkillLabel, getSkillColor } from "@/lib/types";
+import { getSkillLabel, getSkillColor, TOPICS } from "@/lib/types";
 import Link from "next/link";
 
 export default async function DashboardPage() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userId = "anonymous_user";
 
-  if (!user) redirect("/login");
+  const supabase = createClient();
+
+  // Try to create the user rows if they don't exist yet (first sign in sync)
+  const { data: userRow } = await supabase.from("users").select("id").eq("id", userId).single();
+  if (!userRow) {
+    await supabase.from("users").insert({ id: userId, email: "anonymous@example.com" });
+    const skillRows = TOPICS.map((topic) => ({ user_id: userId, topic, score: 0 }));
+    await supabase.from("skill_scores").insert(skillRows);
+  }
 
   // fetch skill scores
   const { data: skills } = await supabase
     .from("skill_scores")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .order("topic");
 
   // fetch sessions
   const { data: sessions } = await supabase
     .from("sessions")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   const totalSessions = sessions?.length || 0;

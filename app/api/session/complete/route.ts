@@ -5,14 +5,9 @@ import { computeContribution, computeNewScore } from "@/lib/scoring";
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const userId = "anonymous_user";
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const supabase = createClient();
 
     const body = await req.json();
     const { problem_slug, stage_reached, hints_used, duration_seconds, solved } = body;
@@ -24,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     // record session
     const { error: sessionError } = await supabase.from("sessions").insert({
-      user_id: user.id,
+      user_id: userId,
       problem_slug,
       stage_reached,
       hints_used,
@@ -49,7 +44,7 @@ export async function POST(req: NextRequest) {
       const { data: skillData } = await supabase
         .from("skill_scores")
         .select("score")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("topic", topic)
         .single();
 
@@ -59,7 +54,7 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("skill_scores")
         .update({ score: newScore })
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("topic", topic);
     }
 

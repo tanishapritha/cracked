@@ -6,14 +6,9 @@ export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const userId = "anonymous_user";
 
-    if (!user) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    const supabase = createClient();
 
     const body = await req.json();
     const { problem_slug, messages, stage, hints_used, hint_level, code } = body;

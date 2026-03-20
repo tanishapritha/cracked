@@ -3,25 +3,25 @@ import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="flex flex-col min-h-screen bg-[#0a0a0a]">
       {/* nav */}
-      <header className="border-b border-[#1f1f1f]">
+      <header className="border-b border-[#1f1f1f] sticky top-0 bg-[#0a0a0a]/80 backdrop-blur-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
+          <span className="text-xl font-bold tracking-tight text-[#f5f5f5]">
             cracked<span className="text-[#84cc16]">]</span>
           </span>
           <div className="flex items-center gap-3">
-            <Link href="/login">
+            <Link href="/dashboard">
               <Button
                 variant="ghost"
                 className="text-[#737373] hover:text-[#f5f5f5] hover:bg-[#1f1f1f]"
               >
-                Sign in
+                Dashboard
               </Button>
             </Link>
-            <Link href="/signup">
+            <Link href="/problems">
               <Button className="bg-[#84cc16] text-[#0a0a0a] font-medium hover:bg-[#84cc16]/90">
-                Get started
+                Browse Problems
               </Button>
             </Link>
           </div>
@@ -29,21 +29,19 @@ export default function HomePage() {
       </header>
 
       {/* hero */}
-      <main className="flex-1 flex items-center">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-[#f5f5f5] leading-tight">
-            Stop memorizing solutions.
-            <br />
-            <span className="text-[#84cc16]">Learn to think</span> like an
-            engineer.
+      <main className="flex-1 flex flex-col items-center justify-center text-center px-4 sm:px-6 py-24 sm:py-32">
+        <div className="max-w-3xl space-y-6">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-[#f5f5f5]">
+            FAANG prep without the{" "}
+            <span className="text-[#84cc16]">bullshit</span>
           </h1>
-          <p className="mt-6 text-lg text-[#737373] max-w-xl mx-auto leading-relaxed">
-            Cracked guides you through FAANG problems like a senior engineer
-            would — with questions, not answers. Socratic coaching that builds
-            real problem-solving intuition.
+          <p className="text-[#737373] text-lg sm:text-xl max-w-2xl mx-auto">
+            Stop memorizing LeetCode solutions. Our Socratic AI coach forces you
+            to think through the conceptual logic before you write a single line of
+            code. Build real problem-solving intuition.
           </p>
           <div className="mt-10 flex items-center justify-center gap-4">
-            <Link href="/signup">
+            <Link href="/problems">
               <Button
                 size="lg"
                 className="bg-[#84cc16] text-[#0a0a0a] font-medium hover:bg-[#84cc16]/90 px-8"
