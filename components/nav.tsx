@@ -19,9 +19,10 @@ export function Nav() {
           <div className="flex items-center gap-8">
             <Link
               href="/dashboard"
-              className="text-lg font-medium tracking-tight text-[#f5f5f5] hover:text-[#84cc16] transition-colors"
+              className="text-lg font-bold tracking-tight transition-colors group"
             >
-              cracked
+              <span className="text-[#f5f5f5]">cracked</span>
+              <span className="text-[#84cc16]">dev</span>
             </Link>
             <div className="flex items-center gap-1">
               {navItems.map((item) => {

@@ -7,8 +7,9 @@ export default function HomePage() {
       {/* nav */}
       <header className="border-b border-[#1f1f1f] sticky top-0 bg-[#0a0a0a]/80 backdrop-blur-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <span className="text-xl font-bold tracking-tight text-[#f5f5f5]">
-            cracked
+          <span className="text-xl font-bold tracking-tight">
+            <span className="text-[#f5f5f5]">cracked</span>
+            <span className="text-[#84cc16]">dev</span>
           </span>
           <div className="flex items-center gap-3">
             <Link href="/dashboard">
@@ -30,10 +31,10 @@ export default function HomePage() {
 
       {/* hero */}
       <main className="flex-1 flex flex-col items-center justify-center text-center px-4 sm:px-6 py-24 sm:py-32">
-        <div className="max-w-3xl space-y-6">
+        <div className="max-w-4xl space-y-6">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-[#f5f5f5]">
-            FAANG prep without the{" "}
-            <span className="text-[#84cc16]">bullshit</span>
+            Become a <span className="text-[#84cc16]">cracked</span> dev with
+            more problems, not direct solutions
           </h1>
           <p className="text-[#737373] text-lg sm:text-xl max-w-2xl mx-auto">
             Stop memorizing LeetCode solutions. Our Socratic AI coach forces you
@@ -106,7 +107,7 @@ export default function HomePage() {
       {/* footer */}
       <footer className="border-t border-[#1f1f1f] py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-[#737373]">
-          cracked — Get cracked at coding interviews.
+          cracked<span className="text-[#84cc16]">dev</span> — Get cracked at coding interviews.
         </div>
       </footer>
     </div>
