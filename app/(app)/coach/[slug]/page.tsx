@@ -140,6 +140,9 @@ export default function CoachPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Mobile navigation
+  const [activeTab, setActiveTab] = useState<"chat" | "code">("chat");
+
   // set starter code
   useEffect(() => {
     if (problem) {
@@ -310,9 +313,25 @@ export default function CoachPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-[#000000]">
+      {/* Mobile Tab Swapper */}
+      <div className="md:hidden flex border-b border-[#1a1a1a] bg-[#050505]">
+        <button 
+          onClick={() => setActiveTab("chat")}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'chat' ? 'text-[#84cc16] border-b-2 border-[#84cc16]' : 'text-[#525252]'}`}
+        >
+          Coaching
+        </button>
+        <button 
+          onClick={() => setActiveTab("code")}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'code' ? 'text-[#84cc16] border-b-2 border-[#84cc16]' : 'text-[#525252]'}`}
+        >
+          Editor
+        </button>
+      </div>
+
       {/* left panel — coach chat */}
-      <div className="w-1/2 border-r border-[#1f1f1f] flex flex-col">
+      <div className={`w-full md:w-1/2 border-r border-[#1a1a1a] flex flex-col bg-[#050505] ${activeTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
         {/* stage indicator */}
         <div className="px-4 py-3 border-b border-[#1f1f1f] flex items-center gap-2">
           {stageLabels.map((label, i) => {
@@ -470,9 +489,9 @@ export default function CoachPage() {
       </div>
 
       {/* right panel — code editor */}
-      <div className="w-1/2 flex flex-col">
+      <div className={`w-full md:w-1/2 flex flex-col bg-[#000000] ${activeTab === 'code' ? 'flex' : 'hidden md:flex'}`}>
         {/* editor toolbar */}
-        <div className="px-4 py-3 border-b border-[#1f1f1f] flex items-center justify-between">
+        <div className="px-4 py-3 border-b-2 border-[#1a1a1a] flex items-center justify-between bg-[#080808]">
           <div className="flex items-center gap-3">
             <select
               value={language}

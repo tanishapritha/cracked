@@ -44,20 +44,25 @@ ${hint_level ? `\nThe user just requested hint level ${hint_level}. ${
 ${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
 ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain time/space complexity, mention edge cases and common variants." : ""}`;
 
-    // build message history for the LLM
-    const llmMessages = [
-      { role: "system", content: systemPrompt },
+    // Prepend systemPrompt as a user instruction to guarantee compatibility with Google/Llama
+    const flattenedMessages = [
+      {
+        role: "user",
+        content: `System Instructions: ${systemPrompt}\n\n[Please acknowledge these rules and start the session.]`,
+      },
       ...messages.map((m: { role: string; content: string }) => ({
         role: m.role === "coach" ? "assistant" : "user",
         content: m.content,
       })),
     ];
 
-    // use OpenRouter to access Claude
+    // use OpenRouter to access Claude / Gemini
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
+      console.error("DEBUG: API key IS NOT CONFIGURED!");
       return new Response("API key not configured", { status: 500 });
     }
+    console.log(`DEBUG: Using API key starting with: ${apiKey.substring(0, 12)}...`);
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -68,8 +73,8 @@ ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain tim
         "X-Title": "cracked",
       },
       body: JSON.stringify({
-        model: "google/gemma-3-12b-it:free",
-        messages: llmMessages,
+        model: "nvidia/nemotron-3-nano-30b-a3b:free",
+        messages: flattenedMessages,
         stream: true,
         max_tokens: 1024,
         temperature: 0.7,

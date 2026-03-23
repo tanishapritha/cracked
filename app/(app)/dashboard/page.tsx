@@ -83,17 +83,17 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         {/* skill bars */}
-        <div className="lg:col-span-2 bg-[#141414] border border-[#1f1f1f] p-6">
-          <h2 className="text-sm font-medium text-[#f5f5f5] mb-4">Skill map</h2>
-          <div className="space-y-3">
+        <div className="lg:col-span-2 bg-[#080808] border border-[#1a1a1a] p-6 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-[#525252] mb-6">Skill map</h2>
+          <div className="space-y-4">
             {(skills || []).map((skill: any) => (
-              <div key={skill.topic} className="flex items-center gap-3">
-                <span className="text-xs text-[#737373] w-32 text-right">
+              <div key={skill.topic} className="flex items-center gap-4">
+                <span className="text-[10px] font-bold uppercase text-[#737373] w-28 text-right shrink-0">
                   {skill.topic}
                 </span>
-                <div className="flex-1 h-2 bg-[#1f1f1f] overflow-hidden">
+                <div className="flex-1 h-3 bg-[#111111] border border-[#1a1a1a] overflow-hidden">
                   <div
-                    className="h-full transition-all duration-500"
+                    className="h-full transition-all duration-700 ease-out"
                     style={{
                       width: `${skill.score}%`,
                       backgroundColor: getSkillColor(skill.score),
@@ -101,13 +101,10 @@ export default async function DashboardPage() {
                   />
                 </div>
                 <span
-                  className="text-xs w-12 text-right"
+                  className="text-xs font-mono font-bold w-12 text-right"
                   style={{ color: getSkillColor(skill.score) }}
                 >
-                  {skill.score}
-                </span>
-                <span className="text-[10px] text-[#737373] w-12">
-                  {getSkillLabel(skill.score)}
+                  {skill.score}%
                 </span>
               </div>
             ))}
@@ -122,23 +119,23 @@ export default async function DashboardPage() {
 
       {/* recommended next */}
       {recommended.length > 0 && (
-        <div className="bg-[#141414] border border-[#1f1f1f] p-6">
-          <h2 className="text-sm font-medium text-[#f5f5f5] mb-4">
+        <div className="bg-[#080808] border border-[#1a1a1a] p-6 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-[#525252] mb-6">
             Recommended next
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {recommended.map((p) => (
               <Link
                 key={p.slug}
                 href={`/coach/${p.slug}`}
-                className="bg-[#0a0a0a] border border-[#1f1f1f] p-4 hover:border-[#84cc16]/30 transition-colors group"
+                className="bg-[#050505] border border-[#1a1a1a] p-5 hover:border-[#84cc16]/50 transition-all group hover:bg-[#0a0a0a]"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-[#f5f5f5] group-hover:text-[#84cc16] transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-base font-bold text-[#f5f5f5] group-hover:text-[#84cc16] transition-colors">
                     {p.title}
                   </span>
                   <span
-                    className={`text-[10px] ${
+                    className={`text-[10px] font-bold px-2 py-0.5 border border-current/10 ${
                       p.difficulty === "Easy"
                         ? "text-[#22c55e]"
                         : p.difficulty === "Medium"
@@ -149,11 +146,11 @@ export default async function DashboardPage() {
                     {p.difficulty}
                   </span>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-2">
                   {p.topics.map((t) => (
                     <span
                       key={t}
-                      className="text-[10px] px-1.5 py-0.5 bg-[#1f1f1f] text-[#737373]"
+                      className="text-[9px] font-bold px-2 py-0.5 bg-[#111111] text-[#525252] uppercase tracking-tighter"
                     >
                       {t}
                     </span>
@@ -178,10 +175,10 @@ function StatCard({
   valueColor?: string;
 }) {
   return (
-    <div className="bg-[#141414] border border-[#1f1f1f] p-5">
-      <p className="text-xs text-[#737373] mb-1">{label}</p>
+    <div className="bg-[#080808] border border-[#1a1a1a] p-6 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#525252] mb-2">{label}</p>
       <p
-        className="text-2xl font-semibold"
+        className="text-3xl font-bold tracking-tighter"
         style={{ color: valueColor || "#f5f5f5" }}
       >
         {value}
