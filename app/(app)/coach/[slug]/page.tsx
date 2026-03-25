@@ -5,28 +5,19 @@ import { useParams } from "next/navigation";
 import { getProblemBySlug } from "@/lib/problems";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
-import type { ChatMessage, CoachStage } from "@/lib/types";
+import type { ChatMessage, CoachStep } from "@/lib/types";
+import { STEP_LABELS } from "@/lib/types";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
-    <div className="h-full bg-[#1e1e1e] flex items-center justify-center text-[#737373] text-sm">
+    <div className="h-full bg-[#0a0a0a] flex items-center justify-center text-[#525252] text-sm">
       Loading editor...
     </div>
   ),
 });
-
-const stageLabels = [
-  "Problem",
-  "Initial Read",
-  "Diagnosis",
-  "Walkthrough",
-  "Coding",
-  "Debrief",
-];
 
 const difficultyColors: Record<string, string> = {
   Easy: "text-[#22c55e]",
@@ -34,149 +25,62 @@ const difficultyColors: Record<string, string> = {
   Hard: "text-[#ef4444]",
 };
 
-function ProblemIntro({
-  problem,
-  onExplain,
-}: {
-  problem: any;
-  onExplain: () => void;
-}) {
-  return (
-    <div className="bg-[#141414] border border-[#1f1f1f] p-5 w-full space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-[#f5f5f5]">{problem.title}</h2>
-        <Badge
-          variant="outline"
-          className={`text-[10px] uppercase tracking-wider ${
-            difficultyColors[problem.difficulty]
-          } border-current/20`}
-        >
-          {problem.difficulty}
-        </Badge>
-      </div>
-
-      <div className="space-y-4">
-        <div className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
-          {problem.description}
-        </div>
-
-        {problem.examples && problem.examples.length > 0 && (
-          <div className="space-y-4">
-            {problem.examples.map((ex: any, i: number) => (
-              <div key={i} className="space-y-2">
-                <div className="text-[10px] font-bold text-[#737373] uppercase tracking-widest">
-                  Example {i + 1}
-                </div>
-                <div className="bg-[#0a0a0a] border border-[#1f1f1f] p-3 font-mono text-xs text-[#d4d4d4] space-y-1">
-                  <div>
-                    <span className="text-[#737373]">Input:</span> {ex.input}
-                  </div>
-                  <div>
-                    <span className="text-[#737373]">Output:</span> {ex.output}
-                  </div>
-                  {ex.explanation && (
-                    <div className="mt-2 pt-2 border-t border-[#1f1f1f] text-[#a3a3a3] italic">
-                      {ex.explanation}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {problem.constraints && problem.constraints.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-[10px] font-bold text-[#737373] uppercase tracking-widest">
-              Constraints
-            </div>
-            <ul className="list-disc list-inside text-xs text-[#737373] space-y-1 font-mono">
-              {problem.constraints.map((c: string, i: number) => (
-                <li key={i}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      <div className="pt-4 border-t border-[#1f1f1f] flex items-center justify-between">
-        <a
-          href={problem.lc_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[10px] text-[#737373] hover:text-[#84cc16] transition-colors"
-        >
-          View on LeetCode ↗
-        </a>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onExplain}
-          className="text-xs text-[#84cc16] hover:bg-[#84cc16]/10 h-7"
-        >
-          Explain problem
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export default function CoachPage() {
   const { slug } = useParams<{ slug: string }>();
   const problem = getProblemBySlug(slug);
 
-  const [stage, setStage] = useState<CoachStage>(1);
+  const [step, setStep] = useState<CoachStep>(1);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [hintsUsed, setHintsUsed] = useState(0);
   const [language, setLanguage] = useState<"python" | "javascript" | "java">("python");
   const [code, setCode] = useState("");
   const [timer, setTimer] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [sessionStartTime] = useState(Date.now());
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [showProblem, setShowProblem] = useState(true);
+  const [buildSubStep, setBuildSubStep] = useState(1);
+
+  // Mobile tab
+  const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Mobile navigation
-  const [activeTab, setActiveTab] = useState<"chat" | "code">("chat");
-
-  // set starter code
+  // Set starter code
   useEffect(() => {
-    if (problem) {
-      setCode(problem.starter_code[language]);
-    }
+    if (problem) setCode(problem.starter_code[language]);
   }, [problem, language]);
 
-  // auto scroll chat
+  // Auto scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // timer for stage 5
+  // Timer
   useEffect(() => {
     if (!timerActive) return;
     const interval = setInterval(() => setTimer((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, [timerActive]);
 
-  // start with stage 1 coach message
+  // Kick off step 1 automatically
   useEffect(() => {
     if (problem && messages.length === 0) {
-      const introMessage: ChatMessage = {
+      const intro: ChatMessage = {
         role: "coach",
         type: "problem-intro",
-        content: `I've loaded the problem for you. Let's start with a solid conceptual breakdown.`,
+        content: "",
       };
-      setMessages([introMessage]);
-      setStage(2);
+      setMessages([intro]);
+      // Auto-send the first coach message
+      sendToCoach("Let's start. Help me understand this problem.", "understand");
     }
   }, [problem]);
 
-  const sendMessage = useCallback(
-    async (content: string, hintLevel?: number) => {
+  const sendToCoach = useCallback(
+    async (content: string, action?: string) => {
       if (isStreaming || !problem) return;
 
       const userMsg: ChatMessage = { role: "user", content };
@@ -191,20 +95,18 @@ export default function CoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             problem_slug: slug,
-            messages: updatedMessages,
-            stage,
-            hints_used: hintsUsed,
-            hint_level: hintLevel,
-            code: stage >= 5 ? code : undefined,
+            messages: updatedMessages.filter((m) => m.type !== "problem-intro"),
+            step,
+            action: action || "chat",
+            code: step >= 4 ? code : undefined,
+            buildSubStep: step === 4 ? buildSubStep : undefined,
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Coach request failed");
-        }
+        if (!response.ok) throw new Error("Coach request failed");
 
         const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response stream");
+        if (!reader) throw new Error("No stream");
 
         const decoder = new TextDecoder();
         let coachContent = "";
@@ -220,48 +122,67 @@ export default function CoachPage() {
 
           setMessages((prev) => {
             const updated = [...prev];
-            updated[updated.length - 1] = {
-              role: "coach",
-              content: coachContent,
-            };
+            updated[updated.length - 1] = { role: "coach", content: coachContent };
             return updated;
           });
         }
-
-        // advance stage based on context
-        if (stage === 2) setStage(3);
-        else if (stage === 3 && coachContent.toLowerCase().includes("ready to code")) {
-          setStage(5);
-          setTimerActive(true);
-        } else if (stage === 3) setStage(4);
-        else if (stage === 4) {
-          setStage(5);
-          setTimerActive(true);
-        }
-      } catch (err) {
-        toast.error("Failed to reach the coach. Try again.");
+      } catch {
+        toast.error("Coach is temporarily unavailable. Try again.");
         setMessages((prev) => prev.filter((m) => m.content !== ""));
       } finally {
         setIsStreaming(false);
       }
     },
-    [isStreaming, problem, messages, stage, hintsUsed, slug, code]
+    [isStreaming, problem, messages, step, slug, code, buildSubStep]
   );
 
-  const handleHint = (level: number) => {
-    if (level > hintsUsed + 1) return;
-    setHintsUsed(level);
-    const hintPrompts = [
-      "Give me a nudge in the right direction. Just a conceptual direction, no specifics.",
-      "Give me a hint. Name the right data structure or pattern I should use.",
-      "Show me the pseudocode. Step by step, no actual syntax.",
-    ];
-    sendMessage(hintPrompts[level - 1], level);
+  // Action handlers
+  const handleIGotIt = () => {
+    if (step < 4) {
+      sendToCoach("I understand this part. Let's move to the next step.");
+      advanceStep();
+    } else if (step === 4) {
+      sendToCoach("I got it, I'll write this part now.");
+      setActiveTab("code");
+      if (!timerActive) setTimerActive(true);
+    }
   };
 
-  const handleSkipStage2 = () => {
-    setStage(3);
-    sendMessage("I'd like to skip the initial read and get right to it.");
+  const handleShowMe = () => {
+    sendToCoach(
+      step === 4
+        ? `Show me the code for this step (build sub-step ${buildSubStep}).`
+        : "Show me — I'm stuck on this part.",
+      "show_me"
+    );
+  };
+
+  const handleExplainMore = () => {
+    sendToCoach("Can you explain this more? I'm not fully getting it.", "explain_more");
+  };
+
+  const handleDoneWithStep = () => {
+    if (step === 4) {
+      setBuildSubStep((s) => s + 1);
+      sendToCoach(`I've written the code for this part. What's the next step?`);
+    } else {
+      advanceStep();
+      sendToCoach("I'm done with this step. Let's continue.");
+    }
+  };
+
+  const handleSkipToCode = () => {
+    setStep(4);
+    setTimerActive(true);
+    sendToCoach("I want to skip ahead and start coding. Guide me through building the solution step by step.");
+  };
+
+  const advanceStep = () => {
+    if (step < 6) {
+      const next = (step + 1) as CoachStep;
+      setStep(next);
+      if (next === 4) setTimerActive(true);
+    }
   };
 
   const endSession = async (solved: boolean) => {
@@ -270,25 +191,23 @@ export default function CoachPage() {
 
     const durationSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
 
-    // get debrief from coach
-    if (stage < 6) {
-      setStage(6);
-      await sendMessage(
+    if (step < 6) {
+      setStep(6);
+      await sendToCoach(
         solved
-          ? "I think I've got a working solution. Can you review my approach?"
-          : "I'm stuck and want to wrap up. Can you debrief me on this problem?"
+          ? "I think I've got a working solution. Can you review my code?"
+          : "I'm stuck. Can you debrief me on this problem and show me what I missed?"
       );
     }
 
-    // record session
     try {
       await fetch("/api/session/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           problem_slug: slug,
-          stage_reached: stage,
-          hints_used: hintsUsed,
+          stage_reached: step,
+          hints_used: 0,
           duration_seconds: durationSeconds,
           solved,
         }),
@@ -300,7 +219,7 @@ export default function CoachPage() {
 
   if (!problem) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-[#737373]">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-[#525252]">
         Problem not found.
       </div>
     );
@@ -313,237 +232,338 @@ export default function CoachPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-[#000000]">
-      {/* Mobile Tab Swapper */}
-      <div className="md:hidden flex border-b border-[#1a1a1a] bg-[#050505]">
-        <button 
-          onClick={() => setActiveTab("chat")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'chat' ? 'text-[#84cc16] border-b-2 border-[#84cc16]' : 'text-[#525252]'}`}
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-black">
+      {/* Mobile tabs */}
+      <div className="md:hidden flex border-b-2 border-[#1a1a1a] bg-[#050505]">
+        <button
+          onClick={() => setActiveTab("coach")}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
+            activeTab === "coach"
+              ? "text-[#84cc16] border-b-2 border-[#84cc16]"
+              : "text-[#525252]"
+          }`}
         >
-          Coaching
+          Coach
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab("code")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'code' ? 'text-[#84cc16] border-b-2 border-[#84cc16]' : 'text-[#525252]'}`}
+          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
+            activeTab === "code"
+              ? "text-[#84cc16] border-b-2 border-[#84cc16]"
+              : "text-[#525252]"
+          }`}
         >
-          Editor
+          Code
         </button>
       </div>
 
-      {/* left panel — coach chat */}
-      <div className={`w-full md:w-1/2 border-r border-[#1a1a1a] flex flex-col bg-[#050505] ${activeTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
-        {/* stage indicator */}
-        <div className="px-4 py-3 border-b border-[#1f1f1f] flex items-center gap-2">
-          {stageLabels.map((label, i) => {
-            const stageNum = (i + 1) as CoachStage;
-            const isCompleted = stage > stageNum;
-            const isCurrent = stage === stageNum;
-            return (
-              <div key={i} className="flex items-center gap-1.5">
-                <div
-                  className={`h-1.5 w-8 transition-colors ${
-                    isCompleted
-                      ? "bg-[#84cc16]"
-                      : isCurrent
-                      ? "bg-[#f59e0b]"
-                      : "bg-[#1f1f1f]"
-                  }`}
-                  title={label}
-                />
-              </div>
-            );
-          })}
-          <span className="text-[10px] text-[#737373] ml-2">
-            {stageLabels[stage - 1]}
-          </span>
+      {/* ============ LEFT: COACH PANEL ============ */}
+      <div
+        className={`w-full md:w-1/2 border-r-2 border-[#1a1a1a] flex flex-col bg-[#050505] ${
+          activeTab === "coach" ? "flex" : "hidden md:flex"
+        }`}
+      >
+        {/* Step tracker */}
+        <div className="px-4 py-3 border-b-2 border-[#1a1a1a] bg-[#080808]">
+          <div className="flex items-center gap-1">
+            {([1, 2, 3, 4, 5, 6] as CoachStep[]).map((s) => (
+              <button
+                key={s}
+                disabled
+                className={`flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  s === step
+                    ? "bg-[#84cc16] text-black"
+                    : s < step
+                    ? "bg-[#1a1a1a] text-[#84cc16]"
+                    : "bg-[#0a0a0a] text-[#333333]"
+                }`}
+              >
+                <span className="w-4 h-4 flex items-center justify-center text-[9px] font-black border border-current/30">
+                  {s < step ? "✓" : s}
+                </span>
+                <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* chat messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* Chat messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.map((msg, i) => (
             <div
               key={i}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.type === "problem-intro" ? (
-                <ProblemIntro
-                  problem={problem}
-                  onExplain={() => sendMessage("Can you explain this problem to me in simpler terms?")}
-                />
+                <div className="bg-[#080808] border border-[#1a1a1a] p-4 w-full space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-[#f5f5f5]">
+                      {problem.title}
+                    </h2>
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] font-bold uppercase tracking-wider ${
+                        difficultyColors[problem.difficulty]
+                      } border-current/20`}
+                    >
+                      {problem.difficulty}
+                    </Badge>
+                  </div>
+                  <button
+                    onClick={() => setShowProblem(!showProblem)}
+                    className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors uppercase tracking-widest font-bold"
+                  >
+                    {showProblem ? "▼ Hide problem" : "▶ Show problem"}
+                  </button>
+                  {showProblem && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-[#d4d4d4] leading-relaxed whitespace-pre-wrap">
+                        {problem.description}
+                      </p>
+                      {problem.examples?.map((ex: any, j: number) => (
+                        <div key={j} className="bg-[#0a0a0a] border border-[#1a1a1a] p-3 font-mono text-xs text-[#a3a3a3] space-y-1">
+                          <div>
+                            <span className="text-[#525252]">Input: </span>
+                            {ex.input}
+                          </div>
+                          <div>
+                            <span className="text-[#525252]">Output: </span>
+                            {ex.output}
+                          </div>
+                        </div>
+                      ))}
+                      <a
+                        href={problem.lc_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors"
+                      >
+                        View on LeetCode ↗
+                      </a>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div
-                  className={`max-w-[85%] px-4 py-2.5 text-sm leading-relaxed ${
+                  className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-[#84cc16]/10 text-[#f5f5f5] border border-[#84cc16]/20"
-                      : "bg-[#1f1f1f] text-[#f5f5f5] border border-[#1f1f1f]"
+                      ? "bg-[#84cc16]/8 text-[#e5e5e5] border border-[#84cc16]/15"
+                      : "bg-[#111111] text-[#e5e5e5] border border-[#1a1a1a]"
                   }`}
                 >
+                  {msg.role === "coach" && (
+                    <div className="text-[9px] font-bold text-[#84cc16] uppercase tracking-widest mb-1.5">
+                      Alex
+                    </div>
+                  )}
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
               )}
             </div>
           ))}
+          {isStreaming && (
+            <div className="flex justify-start">
+              <div className="bg-[#111111] border border-[#1a1a1a] px-4 py-3 text-sm">
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse" />
+                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-150" />
+                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-300" />
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
-        {/* input area */}
-        <div className="px-4 py-3 border-t border-[#1f1f1f]">
-          {stage === 2 && (
-            <div className="flex gap-2 mb-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSkipStage2}
-                className="text-xs border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:bg-[#1f1f1f]"
-              >
-                Skip to coaching
-              </Button>
+        {/* ============ ACTION BAR ============ */}
+        <div className="border-t-2 border-[#1a1a1a] bg-[#080808]">
+          {/* Quick action buttons */}
+          {!sessionEnded && (
+            <div className="px-4 py-3 flex flex-wrap gap-2">
+              {step <= 3 && (
+                <>
+                  <button
+                    onClick={handleIGotIt}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
+                  >
+                    ✓ I get it
+                  </button>
+                  <button
+                    onClick={handleShowMe}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
+                  >
+                    Show me
+                  </button>
+                  <button
+                    onClick={handleExplainMore}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#1a1a1a] text-[#737373] hover:text-[#e5e5e5] transition-colors disabled:opacity-30"
+                  >
+                    Explain more
+                  </button>
+                  <button
+                    onClick={handleSkipToCode}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#525252] hover:text-[#737373] transition-colors disabled:opacity-30 ml-auto"
+                  >
+                    Skip to code →
+                  </button>
+                </>
+              )}
+              {step === 4 && (
+                <>
+                  <button
+                    onClick={handleIGotIt}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
+                  >
+                    ✓ I got it — let me code
+                  </button>
+                  <button
+                    onClick={handleShowMe}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
+                  >
+                    Show me this step
+                  </button>
+                  <button
+                    onClick={handleDoneWithStep}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#22c55e]/15 text-[#22c55e] border border-[#22c55e]/30 hover:bg-[#22c55e]/25 transition-colors disabled:opacity-30"
+                  >
+                    ✓ Done — next step
+                  </button>
+                </>
+              )}
+              {step === 5 && (
+                <>
+                  <button
+                    onClick={handleIGotIt}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
+                  >
+                    ✓ I covered the edge cases
+                  </button>
+                  <button
+                    onClick={handleShowMe}
+                    disabled={isStreaming}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
+                  >
+                    What am I missing?
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          <div className="flex gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (input.trim()) sendMessage(input.trim());
-                }
-              }}
-              placeholder={
-                sessionEnded
-                  ? "Session ended"
-                  : "Type your response..."
-              }
-              disabled={isStreaming || sessionEnded}
-              rows={2}
-              className="flex-1 bg-[#141414] border border-[#1f1f1f] text-[#f5f5f5] text-sm px-3 py-2 resize-none placeholder:text-[#737373] focus:outline-none focus:border-[#84cc16]/50"
-            />
-            <Button
-              onClick={() => input.trim() && sendMessage(input.trim())}
-              disabled={!input.trim() || isStreaming || sessionEnded}
-              className="bg-[#84cc16] text-[#0a0a0a] hover:bg-[#84cc16]/90 self-end"
-              size="sm"
-            >
-              Send
-            </Button>
-          </div>
-
-          {/* hint ladder */}
-          <div className="flex items-center justify-between mt-3">
+          {/* Free text input */}
+          <div className="px-4 py-3 border-t border-[#1a1a1a]">
             <div className="flex gap-2">
-              <button
-                onClick={() => handleHint(1)}
-                disabled={hintsUsed >= 1 || isStreaming || sessionEnded}
-                className={`text-xs px-3 py-1 border transition-colors ${
-                  hintsUsed >= 1
-                    ? "border-[#737373]/20 text-[#737373]/40 cursor-not-allowed"
-                    : "border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:border-[#737373]"
-                }`}
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim()) sendToCoach(input.trim());
+                  }
+                }}
+                placeholder={sessionEnded ? "Session ended" : "Ask Alex anything..."}
+                disabled={isStreaming || sessionEnded}
+                rows={1}
+                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-sm px-3 py-2.5 resize-none placeholder:text-[#333333] focus:outline-none focus:border-[#84cc16]/40"
+              />
+              <Button
+                onClick={() => input.trim() && sendToCoach(input.trim())}
+                disabled={!input.trim() || isStreaming || sessionEnded}
+                className="bg-[#84cc16] text-black hover:bg-[#a3e635] font-bold self-end"
+                size="sm"
               >
-                Nudge me
-              </button>
-              <button
-                onClick={() => handleHint(2)}
-                disabled={hintsUsed < 1 || hintsUsed >= 2 || isStreaming || sessionEnded}
-                className={`text-xs px-3 py-1 border transition-colors ${
-                  hintsUsed >= 2
-                    ? "border-[#737373]/20 text-[#737373]/40 cursor-not-allowed"
-                    : hintsUsed < 1
-                    ? "border-[#737373]/10 text-[#737373]/20 cursor-not-allowed"
-                    : "border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:border-[#737373]"
-                }`}
-              >
-                Give me a hint
-              </button>
-              <button
-                onClick={() => handleHint(3)}
-                disabled={hintsUsed < 2 || hintsUsed >= 3 || isStreaming || sessionEnded}
-                className={`text-xs px-3 py-1 border transition-colors ${
-                  hintsUsed >= 3
-                    ? "border-[#737373]/20 text-[#737373]/40 cursor-not-allowed"
-                    : hintsUsed < 2
-                    ? "border-[#737373]/10 text-[#737373]/20 cursor-not-allowed"
-                    : "border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:border-[#737373]"
-                }`}
-              >
-                Show pseudocode
-              </button>
-            </div>
-
-            {/* hint cost indicator */}
-            <div className="flex gap-1">
-              {[1, 2, 3].map((level) => (
-                <div
-                  key={level}
-                  className={`w-3 h-1.5 ${
-                    hintsUsed >= level ? "bg-[#737373]/30" : "bg-[#84cc16]"
-                  }`}
-                />
-              ))}
+                Send
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* right panel — code editor */}
-      <div className={`w-full md:w-1/2 flex flex-col bg-[#000000] ${activeTab === 'code' ? 'flex' : 'hidden md:flex'}`}>
-        {/* editor toolbar */}
+      {/* ============ RIGHT: CODE PANEL ============ */}
+      <div
+        className={`w-full md:w-1/2 flex flex-col bg-black ${
+          activeTab === "code" ? "flex" : "hidden md:flex"
+        }`}
+      >
+        {/* Toolbar */}
         <div className="px-4 py-3 border-b-2 border-[#1a1a1a] flex items-center justify-between bg-[#080808]">
           <div className="flex items-center gap-3">
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value as "python" | "javascript" | "java")}
-              className="bg-[#141414] border border-[#1f1f1f] text-[#f5f5f5] text-xs px-2 py-1 focus:outline-none focus:border-[#84cc16]/50"
+              onChange={(e) =>
+                setLanguage(e.target.value as "python" | "javascript" | "java")
+              }
+              className="bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-xs px-2.5 py-1.5 focus:outline-none focus:border-[#84cc16]/40 font-bold"
             >
               <option value="python">Python</option>
               <option value="javascript">JavaScript</option>
               <option value="java">Java</option>
             </select>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => toast.info("Code execution is coming soon. Focus on the logic.")}
-              className="text-xs border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:bg-[#1f1f1f]"
-            >
-              Run
-            </Button>
-          </div>
-          <div className="flex items-center gap-4">
             {timerActive && (
-              <span className="text-xs font-mono text-[#84cc16]">
+              <span className="text-xs font-mono font-bold text-[#84cc16] bg-[#84cc16]/10 px-2.5 py-1">
                 {formatTime(timer)}
               </span>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            {step === 4 && (
+              <span className="text-[10px] font-bold text-[#525252] uppercase tracking-widest mr-2">
+                Build step {buildSubStep}
+              </span>
+            )}
             {!sessionEnded && (
-              <div className="flex gap-2">
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    handleDoneWithStep();
+                    setActiveTab("coach");
+                  }}
+                  className="text-xs bg-[#22c55e] text-black hover:bg-[#22c55e]/90 font-bold"
+                >
+                  ✓ Done
+                </Button>
                 <Button
                   size="sm"
                   onClick={() => endSession(true)}
-                  className="text-xs bg-[#22c55e] text-[#0a0a0a] hover:bg-[#22c55e]/90"
+                  className="text-xs bg-[#84cc16] text-black hover:bg-[#a3e635] font-bold"
                 >
-                  Submit
+                  Submit Solution
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => endSession(false)}
-                  className="text-xs border-[#1f1f1f] text-[#737373] hover:text-[#f5f5f5] hover:bg-[#1f1f1f]"
+                  className="text-xs border-[#1a1a1a] text-[#525252] hover:text-[#f5f5f5] hover:bg-[#1a1a1a]"
                 >
-                  I'm done
+                  Give up
                 </Button>
-              </div>
+              </>
             )}
           </div>
         </div>
 
-        {/* editor */}
+        {/* Monaco Editor */}
         <div className="flex-1">
           <MonacoEditor
             height="100%"
-            language={language === "python" ? "python" : language === "java" ? "java" : "javascript"}
+            language={
+              language === "python"
+                ? "python"
+                : language === "java"
+                ? "java"
+                : "javascript"
+            }
             value={code}
             onChange={(value) => setCode(value || "")}
             theme="vs-dark"

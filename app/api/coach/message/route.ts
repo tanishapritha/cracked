@@ -1,54 +1,97 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getProblemBySlug } from "@/lib/problems";
 
 export const runtime = "edge";
 
+const STEP_INSTRUCTIONS: Record<number, string> = {
+  1: `STEP 1 — UNDERSTAND
+You are helping the user understand the problem. Ask them: "In your own words, what is this problem really asking?" 
+If they explain it well, praise them and say "Great, let's move on to thinking about an approach."
+If they're off track, gently rephrase the problem for them.
+Keep it conversational, 2-3 sentences max.`,
+
+  2: `STEP 2 — APPROACH
+Ask: "How would you solve this if you had to explain it to a friend? Brute force is fine to start."
+If they suggest brute force, ask about time complexity and whether we can do better.
+If they suggest the optimal approach, praise them specifically.
+Do NOT name the optimal approach unless they ask for "Show me".
+Keep it to 2-4 sentences.`,
+
+  3: `STEP 3 — DATA STRUCTURE
+Ask: "What data structure would help us here? Think about what operations we need to be fast."
+Guide them toward the right choice through questions about lookup time, ordering, etc.
+Do NOT reveal the answer unless they explicitly ask for "Show me".
+Keep it to 2-3 sentences.`,
+
+  4: `STEP 4 — BUILD (Step-by-Step Coding)
+This is the core teaching phase. Break the solution into micro-steps.
+For each micro-step, tell the user WHAT needs to happen next (e.g., "Now we need to initialize our hash map") but do NOT write the code unless they say "Show me".
+If they say "I got it", wait for them to write code and then validate it.
+If they say "Show me", provide ONLY the code for this one micro-step, nothing more. Format code in a code block.
+After each micro-step is done, move to the next one.
+Keep descriptions to 1-2 sentences per micro-step.`,
+
+  5: `STEP 5 — EDGE CASES
+Ask: "What edge cases should we handle? Think about empty inputs, single elements, duplicates, very large inputs."
+For each edge case they miss, hint at it. For example: "What if the array is empty?" or "What if there are duplicate values?"
+Keep it brief — list format is fine.`,
+
+  6: `STEP 6 — REVIEW
+Review their complete solution. Cover:
+1. Time complexity (Big O)
+2. Space complexity
+3. What they did well
+4. One thing they could improve
+5. Common follow-up interview questions for this problem
+Be encouraging but honest. This is the debrief.`,
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const userId = "anonymous_user";
-
-    const supabase = createClient();
-
     const body = await req.json();
-    const { problem_slug, messages, stage, hints_used, hint_level, code } = body;
+    const { problem_slug, messages, step, action, code, buildSubStep } = body;
 
     const problem = getProblemBySlug(problem_slug);
     if (!problem) {
       return new Response("Problem not found", { status: 404 });
     }
 
-    const systemPrompt = `You are a Socratic coding coach helping someone prepare for FAANG interviews. Your job is NOT to give answers — it is to guide the user to discover the answer themselves through questions and nudges.
+    const currentStep = step || 1;
 
-Current problem: ${problem.title}
+    // Build the system prompt based on current step
+    const systemPrompt = `You are Alex, a Socratic coding coach for FAANG interview prep. You guide users step-by-step through solving problems — you do NOT give away answers.
+
+Problem: ${problem.title}
 Difficulty: ${problem.difficulty}
 Topics: ${problem.topics.join(", ")}
-Coach context (do not reveal this directly): ${problem.coach_context}
+Coach context (NEVER reveal directly): ${problem.coach_context}
+
+${STEP_INSTRUCTIONS[currentStep] || STEP_INSTRUCTIONS[1]}
+
+${action === "show_me" ? `
+IMPORTANT: The user clicked "Show me". For this ONE micro-step only, provide the actual code snippet. Keep it minimal — just the code for this specific part, not the full solution.
+${currentStep === 4 && buildSubStep ? `Current build sub-step: ${buildSubStep}` : ""}
+` : ""}
+
+${action === "explain_more" ? `
+The user wants more explanation. Go deeper on the current concept. Use an analogy if helpful. Still don't give away the answer.
+` : ""}
+
+${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
 
 Rules:
-- Never give away the solution or optimal approach unprompted
-- Always respond with a question or a partial insight that makes the user think
-- Praise correct thinking specifically ("yes, O(n) lookup is exactly why a hash map helps here")
-- When correcting wrong thinking, don't say "that's wrong" — say "that works, but what's the cost?" or "interesting — what happens when the input is very large?"
-- Keep responses concise — 3-5 sentences max unless doing a concept walkthrough
-- Stage you're in: ${stage}
-- Hints used so far: ${hints_used}
-- Your name is Alex. On your very first message in a session, sign off: "-- Alex"
-${hint_level ? `\nThe user just requested hint level ${hint_level}. ${
-  hint_level === 1
-    ? "Give a conceptual direction only. Do NOT name any data structures."
-    : hint_level === 2
-    ? "Name the right data structure or pattern to use."
-    : "Provide step-by-step pseudocode. No actual syntax."
-}` : ""}
-${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
-${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain time/space complexity, mention edge cases and common variants." : ""}`;
+- Keep responses SHORT (2-4 sentences unless doing a code review in step 6)
+- Never give the full solution at once
+- Praise specific correct thinking
+- When correcting, don't say "wrong" — ask "what happens when..."
+- Your name is Alex
+- On your very first message, sign off: "— Alex"`;
 
-    // Prepend systemPrompt as a user instruction to guarantee compatibility with Google/Llama
-    const flattenedMessages = [
+    // Build messages for the LLM
+    const llmMessages = [
       {
         role: "user",
-        content: `System Instructions: ${systemPrompt}\n\n[Please acknowledge these rules and start the session.]`,
+        content: `[Instructions for Alex the coach]: ${systemPrompt}\n\n[Begin session]`,
       },
       ...messages.map((m: { role: string; content: string }) => ({
         role: m.role === "coach" ? "assistant" : "user",
@@ -56,13 +99,10 @@ ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain tim
       })),
     ];
 
-    // use OpenRouter to access Claude / Gemini
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      console.error("DEBUG: API key IS NOT CONFIGURED!");
       return new Response("API key not configured", { status: 500 });
     }
-    console.log(`DEBUG: Using API key starting with: ${apiKey.substring(0, 12)}...`);
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -70,11 +110,11 @@ ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain tim
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://cracked.dev",
-        "X-Title": "cracked",
+        "X-Title": "crackeddev",
       },
       body: JSON.stringify({
         model: "nvidia/nemotron-3-nano-30b-a3b:free",
-        messages: flattenedMessages,
+        messages: llmMessages,
         stream: true,
         max_tokens: 1024,
         temperature: 0.7,
@@ -87,7 +127,7 @@ ${stage === 6 ? "\nThis is the debrief stage. Review their approach, explain tim
       return new Response("Coach temporarily unavailable", { status: 502 });
     }
 
-    // stream the SSE response back
+    // Stream the SSE response back
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({

@@ -34,12 +34,25 @@ export interface Problem {
   coach_context: string;
 }
 
-export type CoachStage = 1 | 2 | 3 | 4 | 5 | 6;
+export type CoachStep = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const STEP_LABELS: Record<CoachStep, string> = {
+  1: "Understand",
+  2: "Approach",
+  3: "Data Structure",
+  4: "Build",
+  5: "Edge Cases",
+  6: "Review",
+};
+
+// Keep old type as alias for backward compat
+export type CoachStage = CoachStep;
 
 export interface ChatMessage {
   role: "coach" | "user";
   content: string;
-  type?: "problem-intro" | "text" | "hint";
+  type?: "problem-intro" | "text" | "hint" | "code-reveal";
+  codeSnippet?: string; // AI-generated code for "Show me" actions
 }
 
 export interface Session {
