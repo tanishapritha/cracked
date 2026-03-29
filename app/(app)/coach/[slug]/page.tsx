@@ -363,8 +363,8 @@ export default function CoachPage() {
                     }`}
                   >
                     {msg.role === "coach" && (
-                      <div className="text-[9px] font-bold text-[#84cc16] uppercase tracking-widest mb-1.5">
-                        Alex
+                      <div className="text-[9px] font-black text-[#84cc16] uppercase tracking-[0.2em] mb-2 border-b border-[#84cc16]/10 pb-1">
+                        COACH
                       </div>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -433,7 +433,7 @@ export default function CoachPage() {
                     if (input.trim()) sendToCoach(input.trim());
                   }
                 }}
-                placeholder={sessionEnded ? "Session ended" : "Ask Alex anything..."}
+                placeholder={sessionEnded ? "Session ended" : "Type to ask for help..."}
                 disabled={isStreaming || sessionEnded}
                 rows={1}
                 className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-sm px-4 py-3 rounded-lg resize-none placeholder:text-[#333333] focus:outline-none focus:border-[#84cc16]/40 transition-all font-medium"
@@ -543,7 +543,7 @@ export default function CoachPage() {
                     if (trackStatus === "OFF_TRACK") {
                       setActiveTab("coach");
                       if (lastSilentHint) {
-                        setMessages(prev => [...prev, { role: "coach", content: `Alex noticed: ${lastSilentHint}` }]);
+                        setMessages(prev => [...prev, { role: "coach", content: `Coach noticed: ${lastSilentHint}` }]);
                         setLastSilentHint(""); // Clear it so it doesn't duplicate
                       }
                     }
@@ -557,7 +557,7 @@ export default function CoachPage() {
                   </span>
                   {trackStatus === "OFF_TRACK" && (
                     <span className="text-[9px] bg-[#ef4444]/20 px-1.5 py-0.5 rounded ml-1 animate-bounce">
-                      Ask Alex
+                      GET HELP
                     </span>
                   )}
                 </div>

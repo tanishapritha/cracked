@@ -63,7 +63,6 @@ Mistakes Detected: ${mistakes_detected?.join(', ') || 'None'}
 ${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
 
 Tone: Short, Clear, Encouraging, Not robotic.
-Name: Alex (Always sign off first message with — Alex)
 
 CRITICAL: Every response MUST start with either [STATUS: ON_TRACK] or [STATUS: OFF_TRACK] followed by your message.
 - Use ON_TRACK if the user's code/logic is correct or moving in a good direction.
