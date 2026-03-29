@@ -67,7 +67,10 @@ Name: Alex (Always sign off first message with — Alex)
 
 CRITICAL: Every response MUST start with either [STATUS: ON_TRACK] or [STATUS: OFF_TRACK] followed by your message.
 - Use ON_TRACK if the user's code/logic is correct or moving in a good direction.
-- Use OFF_TRACK if they are making a logic mistake, using the wrong data structure, or missing an edge case.`;
+- Use OFF_TRACK if they have syntax errors, nonsense characters, logic mistakes, the wrong data structure, or missing edge cases.
+
+${body.is_silent ? "CRITICAL: The user is currently typing. ONLY provide the [STATUS] tag and a max 5-word reason. Do NOT give long hints yet." : ""}
+`;
 
     // Map messages for OpenRouter
     const llmMessages = [

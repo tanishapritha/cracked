@@ -45,6 +45,7 @@ export default function CoachPage() {
   const [trackStatus, setTrackStatus] = useState<"ON_TRACK" | "OFF_TRACK" | null>(null);
   const [isCheckingTrack, setIsCheckingTrack] = useState(false);
   const [apiError, setApiError] = useState(false);
+  const [lastSilentHint, setLastSilentHint] = useState("");
 
   // Mobile tab
   const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
@@ -61,6 +62,20 @@ export default function CoachPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Time auto check
+  const lastCheckedCodeRef = useRef("");
+  useEffect(() => {
+    if (sessionEnded || mode !== "CODING" || isStreaming || !code) return;
+    if (code === lastCheckedCodeRef.current) return;
+
+    const pulseTimer = setTimeout(() => {
+      lastCheckedCodeRef.current = code;
+      sendToCoach("[BACKGROUND_CHECK]", "CODING");
+    }, 8000); // 8 second chill period
+
+    return () => clearTimeout(pulseTimer);
+  }, [code, isStreaming, sessionEnded, mode]);
 
   // Timer
   useEffect(() => {
@@ -93,6 +108,7 @@ export default function CoachPage() {
       setIsStreaming(true);
 
       const currentMode = overrideMode || mode;
+      const isSilent = overrideMode === "CODING" && content === "[BACKGROUND_CHECK]";
 
       try {
         const response = await fetch("/api/coach/message", {
@@ -106,6 +122,7 @@ export default function CoachPage() {
             attempts,
             time_spent: timer,
             code: code,
+            is_silent: isSilent
           }),
         });
 
@@ -117,7 +134,7 @@ export default function CoachPage() {
         const decoder = new TextDecoder();
         let coachContent = "";
 
-        setMessages((prev) => [...prev, { role: "coach", content: "" }]);
+        if (!isSilent) setMessages((prev) => [...prev, { role: "coach", content: "" }]);
 
         while (true) {
           const { done, value } = await reader.read();
@@ -126,33 +143,37 @@ export default function CoachPage() {
           const chunk = decoder.decode(value, { stream: true });
           coachContent += chunk;
 
-          setMessages((prev) => {
-            const updated = [...prev];
-            let strippedContent = coachContent;
-            
-            // Extract Status Tag and Strip it
-            if (coachContent.includes("[STATUS: ON_TRACK]")) {
-              setTrackStatus("ON_TRACK");
-              strippedContent = coachContent.replace("[STATUS: ON_TRACK]", "").trim();
-            } else if (coachContent.includes("[STATUS: OFF_TRACK]")) {
-              setTrackStatus("OFF_TRACK");
-              strippedContent = coachContent.replace("[STATUS: OFF_TRACK]", "").trim();
-            }
+          // Extract Status Tag and Strip it (even in silent mode)
+          let strippedContent = coachContent;
+          if (coachContent.includes("[STATUS: ON_TRACK]")) {
+            setTrackStatus("ON_TRACK");
+            strippedContent = coachContent.replace("[STATUS: ON_TRACK]", "").trim();
+          } else if (coachContent.includes("[STATUS: OFF_TRACK]")) {
+            setTrackStatus("OFF_TRACK");
+            strippedContent = coachContent.replace("[STATUS: OFF_TRACK]", "").trim();
+          }
 
-            updated[updated.length - 1] = { role: "coach", content: strippedContent };
-            return updated;
-          });
+          if (isSilent) {
+            setLastSilentHint(strippedContent);
+          } else {
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: "coach", content: strippedContent };
+              return updated;
+            });
+          }
         }
       } catch (err) {
-        setApiError(true);
-        setMessages((prev) => [
-          ...prev.filter((m) => m.content !== ""),
-          {
-            role: "coach",
-            content: "⚠️ **Our AI key is currently exhausted or rate-limited.**\n\nTo continue your session without interruption, you can add your own free API key in your settings (coming soon) or directly in your environment. \n\n**Get a free key here:**\n- [Gemini (Google) Key](https://aistudio.google.com/app/apikey)\n- [Groq AI Key](https://console.groq.com/keys)\n- [OpenRouter Key](https://openrouter.ai/keys)\n\nWe apologize for the interruption! — Alex",
-          },
-        ]);
-        toast.error("Coach rate-limited. Add your own key to continue.");
+        if (!isSilent) {
+          setApiError(true);
+          setMessages((prev) => [
+            ...prev.filter((m) => m.content !== ""),
+            {
+              role: "coach",
+              content: "⚠️ **Our AI key is currently exhausted or rate-limited.**\n\nTo continue your session without interruption, you can add your own free API key in your settings (coming soon) or directly in your environment. \n\n**Get a free key here:**\n- [Gemini (Google) Key](https://aistudio.google.com/app/apikey)\n- [Groq AI Key](https://console.groq.com/keys)\n- [OpenRouter Key](https://openrouter.ai/keys)\n\nWe apologize for the interruption! — Alex",
+            },
+          ]);
+        }
       } finally {
         setIsStreaming(false);
       }
@@ -518,7 +539,15 @@ export default function CoachPage() {
                       ? "bg-[#84cc16]/10 border-[#84cc16]/30 text-[#84cc16]" 
                       : "bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444] cursor-help hover:scale-105 active:scale-95"
                   }`}
-                  onClick={() => trackStatus === "OFF_TRACK" && setActiveTab("coach")}
+                  onClick={() => {
+                    if (trackStatus === "OFF_TRACK") {
+                      setActiveTab("coach");
+                      if (lastSilentHint) {
+                        setMessages(prev => [...prev, { role: "coach", content: `Alex noticed: ${lastSilentHint}` }]);
+                        setLastSilentHint(""); // Clear it so it doesn't duplicate
+                      }
+                    }
+                  }}
                 >
                   <div className={`w-2 h-2 rounded-full animate-pulse ${
                     trackStatus === "ON_TRACK" ? "bg-[#84cc16]" : "bg-[#ef4444]"
