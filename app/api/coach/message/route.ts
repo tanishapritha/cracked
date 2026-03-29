@@ -14,13 +14,22 @@ export async function POST(req: NextRequest) {
       attempts, 
       time_spent, 
       code,
-      mistakes_detected 
+      mistakes_detected,
+      user_key
     } = body;
 
     const problem = getProblemBySlug(problem_slug);
     if (!problem) {
       return new Response("Problem not found", { status: 404 });
     }
+
+    // Determine API Key Priority
+    let apiKey = user_key || process.env.ANTHROPIC_API_KEY;
+    let apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+    let model = "nvidia/nemotron-3-nano-30b-a3b:free";
+    let isFallback = false;
+
+    if (!apiKey) return new Response("API key not configured", { status: 500 });
 
     const systemPrompt = `You are an AI coding coach integrated inside a LeetCode-style platform.
 Your role is NOT to solve problems. Your role is to guide the user step-by-step like a coach sitting beside them.
@@ -71,7 +80,6 @@ CRITICAL: Every response MUST start with either [STATUS: ON_TRACK] or [STATUS: O
 ${body.is_silent ? "CRITICAL: The user is currently typing. ONLY provide the [STATUS] tag and a max 5-word reason. Do NOT give long hints yet." : ""}
 `;
 
-    // Map messages for OpenRouter
     const llmMessages = [
       {
         role: "user",
@@ -82,13 +90,6 @@ ${body.is_silent ? "CRITICAL: The user is currently typing. ONLY provide the [ST
         content: m.content,
       })),
     ];
-
-    let apiKey = process.env.ANTHROPIC_API_KEY;
-    let apiUrl = "https://openrouter.ai/api/v1/chat/completions";
-    let model = "nvidia/nemotron-3-nano-30b-a3b:free";
-    let isFallback = false;
-
-    if (!apiKey) return new Response("API key not configured", { status: 500 });
 
     let response = await fetch(apiUrl, {
       method: "POST",
@@ -107,13 +108,12 @@ ${body.is_silent ? "CRITICAL: The user is currently typing. ONLY provide the [ST
       }),
     });
 
-    // --- FALLBACK TO GROQ ---
-    if (!response.ok && process.env.GROQ_API_KEY) {
-      console.log("Switching to GROQ fallback...");
+    // --- FALLBACK TO GROQ (Only if not using user_key) ---
+    if (!response.ok && !user_key && process.env.GROQ_API_KEY) {
       isFallback = true;
       apiKey = process.env.GROQ_API_KEY;
       apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-      model = "llama-3.3-70b-versatile"; // High quality Groq model
+      model = "llama-3.3-70b-versatile";
 
       response = await fetch(apiUrl, {
         method: "POST",

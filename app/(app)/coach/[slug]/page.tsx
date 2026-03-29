@@ -46,6 +46,8 @@ export default function CoachPage() {
   const [isCheckingTrack, setIsCheckingTrack] = useState(false);
   const [apiError, setApiError] = useState(false);
   const [lastSilentHint, setLastSilentHint] = useState("");
+  const [userApiKey, setUserApiKey] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Mobile tab
   const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
@@ -57,6 +59,18 @@ export default function CoachPage() {
   useEffect(() => {
     if (problem) setCode(problem.starter_code[language]);
   }, [problem, language]);
+
+  // Load API Key
+  useEffect(() => {
+    const savedKey = localStorage.getItem("cracked_user_key");
+    if (savedKey) setUserApiKey(savedKey);
+  }, []);
+
+  const saveUserKey = (key: string) => {
+    localStorage.setItem("cracked_user_key", key);
+    setUserApiKey(key);
+    setApiError(false);
+  };
 
   // Auto scroll
   useEffect(() => {
@@ -122,7 +136,8 @@ export default function CoachPage() {
             attempts,
             time_spent: timer,
             code: code,
-            is_silent: isSilent
+            is_silent: isSilent,
+            user_key: userApiKey
           }),
         });
 
@@ -166,13 +181,8 @@ export default function CoachPage() {
       } catch (err) {
         if (!isSilent) {
           setApiError(true);
-          setMessages((prev) => [
-            ...prev.filter((m) => m.content !== ""),
-            {
-              role: "coach",
-              content: "⚠️ **Our AI key is currently exhausted or rate-limited.**\n\nTo continue your session without interruption, you can add your own free API key in your settings (coming soon) or directly in your environment. \n\n**Get a free key here:**\n- [Gemini (Google) Key](https://aistudio.google.com/app/apikey)\n- [Groq AI Key](https://console.groq.com/keys)\n- [OpenRouter Key](https://openrouter.ai/keys)\n\nWe apologize for the interruption! — Alex",
-            },
-          ]);
+          setIsSettingsOpen(true);
+          toast.error("Rate-limited. Using backup key or settings...");
         }
       } finally {
         setIsStreaming(false);
@@ -282,8 +292,8 @@ export default function CoachPage() {
           }`}
         >
           {/* Hint Tracker */}
-          <div className="px-6 py-4 border-b border-[#1a1a1a] bg-[#080808]">
-            <div className="flex items-center justify-between gap-4">
+          <div className="px-6 py-4 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between">
+            <div className="flex items-center gap-4 flex-1 mr-4">
               <div className="flex gap-1.5 flex-1">
                 {[1, 2, 3, 4, 5].map((l) => (
                   <div 
@@ -296,6 +306,13 @@ export default function CoachPage() {
                 Hint level {hintLevel}
               </span>
             </div>
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-[#1a1a1a] transition-colors"
+              title="API Key Settings"
+            >
+              <span className="text-lg opacity-50 hover:opacity-100">⚙️</span>
+            </button>
           </div>
 
           {/* Chat messages */}
@@ -566,6 +583,99 @@ export default function CoachPage() {
           </div>
         </div>
       </div>
-    </div>
+
+    {/* ============ KEY SETTINGS SIDE PANEL ============ */}
+    {isSettingsOpen && (
+      <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-300">
+        <div 
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+          onClick={() => setIsSettingsOpen(false)}
+        />
+        <div className="w-full max-w-sm bg-[#080808] border-l border-[#1a1a1a] shadow-2xl relative flex flex-col p-6 animate-in slide-in-from-right duration-500">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#84cc16]">
+              Key Settings
+            </h3>
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="text-[#525252] hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            {apiError && (
+              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">
+                  Rate Limit Warning
+                </p>
+                <p className="text-xs text-[#a3a3a3] leading-relaxed">
+                  Our shared key is currently exhausted. To continue your session, please plug in your own free key below.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#525252] block ml-1">
+                Your API Key (OpenRouter)
+              </label>
+              <input
+                type="password"
+                value={userApiKey}
+                onChange={(e) => saveUserKey(e.target.value)}
+                placeholder="sk-or-v1-..."
+                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] p-3 rounded-lg text-sm text-white placeholder:text-[#262626] focus:outline-none focus:border-[#84cc16]/40 transition-all font-mono"
+              />
+              <p className="text-[9px] text-[#404040] leading-relaxed px-1 text-center">
+                Your key is stored locally in your browser. It never leaves your device except to fetch AI responses.
+              </p>
+            </div>
+
+            <div className="pt-4 space-y-3">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-[#525252] ml-1">
+                Don't have a key? Get one free:
+              </h4>
+              <div className="grid grid-cols-1 gap-2">
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
+                >
+                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">Google Gemini</span>
+                  <span className="text-[10px] font-black text-[#84cc16]">FREE ↗</span>
+                </a>
+                <a 
+                  href="https://console.groq.com/keys" 
+                  target="_blank" 
+                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
+                >
+                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">Groq AI</span>
+                  <span className="text-[10px] font-black text-[#84cc16]">FAST ↗</span>
+                </a>
+                <a 
+                  href="https://openrouter.ai/keys" 
+                  target="_blank" 
+                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
+                >
+                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">OpenRouter</span>
+                  <span className="text-[10px] font-black text-[#84cc16]">HUB ↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-auto pt-8 border-t border-[#1a1a1a]">
+            <Button
+              className="w-full bg-[#84cc16] text-black font-black uppercase tracking-widest text-[10px] py-4 rounded-xl shadow-[0_0_20px_rgba(132,204,22,0.15)]"
+              onClick={() => setIsSettingsOpen(false)}
+            >
+              Ready to code
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
   );
 }
