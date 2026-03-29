@@ -9,6 +9,7 @@ import type { ChatMessage } from "@/lib/types";
 import { STEP_LABELS } from "@/lib/types";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
+import { FloatingOrb } from "@/components/coach/floating-orb";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -48,6 +49,8 @@ export default function CoachPage() {
   const [lastSilentHint, setLastSilentHint] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
 
   // Mobile tab
   const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
@@ -60,11 +63,19 @@ export default function CoachPage() {
     if (problem) setCode(problem.starter_code[language]);
   }, [problem, language]);
 
-  // Load API Key
+  // Load Settings
   useEffect(() => {
     const savedKey = localStorage.getItem("cracked_user_key");
+    const savedMute = localStorage.getItem("cracked_is_muted") === "true";
     if (savedKey) setUserApiKey(savedKey);
+    setIsMuted(savedMute);
   }, []);
+
+  const saveMute = (muted: boolean) => {
+    localStorage.setItem("cracked_is_muted", String(muted));
+    setIsMuted(muted);
+    if (muted) setTrackStatus(null);
+  };
 
   const saveUserKey = (key: string) => {
     localStorage.setItem("cracked_user_key", key);
@@ -77,19 +88,23 @@ export default function CoachPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Time auto check
+  // Token-Efficient Background Check
   const lastCheckedCodeRef = useRef("");
   useEffect(() => {
-    if (sessionEnded || mode !== "CODING" || isStreaming || !code) return;
+    if (sessionEnded || mode !== "CODING" || isStreaming || !code || isMuted) return;
     if (code === lastCheckedCodeRef.current) return;
 
-    const pulseTimer = setTimeout(() => {
+    const pulseInterval = setTimeout(() => {
       lastCheckedCodeRef.current = code;
-      sendToCoach("[BACKGROUND_CHECK]", "CODING");
-    }, 8000); // 8 second chill period
+      // TOKEN OPTIMIZATION: Send only recent lines if code is long
+      const lines = code.split('\n');
+      const recentLines = lines.length > 30 ? lines.slice(-30).join('\n') : code;
+      
+      sendToCoach("[BACKGROUND_CHECK]", "CODING", recentLines);
+    }, 10000); // 10 second chill period
 
-    return () => clearTimeout(pulseTimer);
-  }, [code, isStreaming, sessionEnded, mode]);
+    return () => clearTimeout(pulseInterval);
+  }, [code, isStreaming, sessionEnded, mode, isMuted]);
 
   // Timer
   useEffect(() => {
@@ -112,14 +127,16 @@ export default function CoachPage() {
   }, [problem]);
 
   const sendToCoach = useCallback(
-    async (content: string, overrideMode?: typeof mode) => {
+    async (content: string, overrideMode?: typeof mode, codeSegment?: string) => {
       if (isStreaming || !problem) return;
 
       const userMsg: ChatMessage = { role: "user", content };
       const updatedMessages = [...messages, userMsg];
-      setMessages(updatedMessages);
+      if (content !== "[BACKGROUND_CHECK]") setMessages(updatedMessages);
+      
       setInput("");
       setIsStreaming(true);
+      if (content === "[BACKGROUND_CHECK]") setIsThinking(true);
 
       const currentMode = overrideMode || mode;
       const isSilent = overrideMode === "CODING" && content === "[BACKGROUND_CHECK]";
@@ -130,12 +147,12 @@ export default function CoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             problem_slug: slug,
-            messages: updatedMessages.filter((m) => m.type !== "problem-intro"),
+            messages: isSilent ? [] : updatedMessages.filter((m) => m.type !== "problem-intro"), // TOKEN_SAVING
             mode: currentMode,
             hint_level: hintLevel,
             attempts,
             time_spent: timer,
-            code: code,
+            code: codeSegment || code, // Use segment if provided for efficiency
             is_silent: isSilent,
             user_key: userApiKey
           }),
@@ -186,6 +203,7 @@ export default function CoachPage() {
         }
       } finally {
         setIsStreaming(false);
+        setIsThinking(false);
       }
     },
     [isStreaming, problem, messages, slug, mode, hintLevel, attempts, timer, code]
@@ -547,39 +565,21 @@ export default function CoachPage() {
               }}
             />
 
-            {/* LIVE PULSE BUBBLE */}
-            <div className="absolute bottom-6 right-6 flex flex-col items-end gap-3 pointer-events-none">
-              {trackStatus && (
-                <div 
-                  className={`pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-full border shadow-2xl transition-all duration-300 transform animate-in fade-in slide-in-from-bottom-2 ${
-                    trackStatus === "ON_TRACK" 
-                      ? "bg-[#84cc16]/10 border-[#84cc16]/30 text-[#84cc16]" 
-                      : "bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444] cursor-help hover:scale-105 active:scale-95"
-                  }`}
-                  onClick={() => {
-                    if (trackStatus === "OFF_TRACK") {
-                      setActiveTab("coach");
-                      if (lastSilentHint) {
-                        setMessages(prev => [...prev, { role: "coach", content: `Coach noticed: ${lastSilentHint}` }]);
-                        setLastSilentHint(""); // Clear it so it doesn't duplicate
-                      }
-                    }
-                  }}
-                >
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${
-                    trackStatus === "ON_TRACK" ? "bg-[#84cc16]" : "bg-[#ef4444]"
-                  }`} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    {trackStatus === "ON_TRACK" ? "On Track" : "Wrong Direction"}
-                  </span>
-                  {trackStatus === "OFF_TRACK" && (
-                    <span className="text-[9px] bg-[#ef4444]/20 px-1.5 py-0.5 rounded ml-1 animate-bounce">
-                      GET HELP
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            <FloatingOrb 
+              status={isThinking ? "THINKING" : trackStatus === "ON_TRACK" ? "ON_TRACK" : trackStatus === "OFF_TRACK" ? "OFF_TRACK" : "IDLE"}
+              hint={lastSilentHint}
+              isMuted={isMuted}
+              onToggleMute={() => saveMute(!isMuted)}
+              onClickHelp={() => {
+                if (trackStatus === "OFF_TRACK") {
+                  setActiveTab("coach");
+                  if (lastSilentHint) {
+                    setMessages(prev => [...prev, { role: "coach", content: `Coach noticed: ${lastSilentHint}` }]);
+                    setLastSilentHint(""); 
+                  }
+                }
+              }}
+            />
           </div>
         </div>
       </div>
