@@ -65,8 +65,8 @@ ${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
 Tone: Short, Clear, Encouraging, Not robotic.
 
 CRITICAL: Every response MUST start with either [STATUS: ON_TRACK] or [STATUS: OFF_TRACK] followed by your message.
-- Use ON_TRACK if the user's code/logic is correct or moving in a good direction.
-- Use OFF_TRACK if they have syntax errors, nonsense characters, logic mistakes, the wrong data structure, or missing edge cases.
+- Use ON_TRACK if the user's logic is heading the right way or they've chosen the correct data structure, even if there's a small syntax typo.
+- Use OFF_TRACK only for significant logic gaps, using the wrong data structure for the problem, or total nonsense characters.
 
 ${body.is_silent ? "CRITICAL: The user is currently typing. ONLY provide the [STATUS] tag and a max 5-word reason. Do NOT give long hints yet." : ""}
 `;
