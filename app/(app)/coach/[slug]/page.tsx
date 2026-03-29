@@ -51,6 +51,10 @@ export default function CoachPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [localErrorHint, setLocalErrorHint] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
 
   // Mobile tab
   const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
@@ -91,20 +95,50 @@ export default function CoachPage() {
   // Token-Efficient Background Check
   const lastCheckedCodeRef = useRef("");
   useEffect(() => {
-    if (sessionEnded || mode !== "CODING" || isStreaming || !code || isMuted) return;
+    if (sessionEnded || mode !== "CODING" || isStreaming || !code || isMuted || localErrorHint) return;
     if (code === lastCheckedCodeRef.current) return;
 
     const pulseInterval = setTimeout(() => {
       lastCheckedCodeRef.current = code;
-      // TOKEN OPTIMIZATION: Send only recent lines if code is long
       const lines = code.split('\n');
       const recentLines = lines.length > 30 ? lines.slice(-30).join('\n') : code;
       
       sendToCoach("[BACKGROUND_CHECK]", "CODING", recentLines);
-    }, 10000); // 10 second chill period
+    }, 3000); // High-octane pulse every 3s of idle time
 
     return () => clearTimeout(pulseInterval);
-  }, [code, isStreaming, sessionEnded, mode, isMuted]);
+  }, [code, isStreaming, sessionEnded, mode, isMuted, localErrorHint]);
+
+  // Local Syntax Checking (0 Tokens)
+  useEffect(() => {
+    if (isMuted) return;
+    
+    const checkTimer = setTimeout(() => {
+      if (!editorRef.current) return;
+      const model = editorRef.current.getModel();
+      if (!model) return;
+      
+      // @ts-ignore
+      const markers = editorRef.current._codeEditorService?.window.monaco?.editor.getModelMarkers({ resource: model.uri }) 
+                       || (window as any).monaco?.editor.getModelMarkers({ resource: model.uri });
+
+      if (markers && markers.length > 0) {
+        setLocalErrorHint(`${markers[0].message} (Local)`);
+        setTrackStatus("OFF_TRACK");
+      } else {
+        setLocalErrorHint(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(checkTimer);
+  }, [code, isMuted]);
+
+  // Typing Velocity (Opacity Control)
+  useEffect(() => {
+    setIsTyping(true);
+    const timeout = setTimeout(() => setIsTyping(false), 800);
+    return () => clearTimeout(timeout);
+  }, [code]);
 
   // Timer
   useEffect(() => {
@@ -535,8 +569,8 @@ export default function CoachPage() {
             </div>
           </div>
 
-          {/* Monaco Editor */}
-          <div className="flex-1 relative group">
+          {/* Monaco Editor Wrapper */}
+          <div className="flex-1 min-h-0 relative group overflow-visible">
             <MonacoEditor
               height="100%"
               language={
@@ -549,6 +583,23 @@ export default function CoachPage() {
                   : "javascript"
               }
               value={code}
+              onMount={(editor) => {
+                editorRef.current = editor;
+                
+                // Initial scan
+                const pos = editor.getPosition();
+                if (pos) {
+                  const viewPos = editor.getScrolledVisiblePosition(pos);
+                  if (viewPos) setCursorPos({ x: viewPos.left, y: viewPos.top - 10 });
+                }
+
+                editor.onDidChangeCursorPosition((e: any) => {
+                  const position = editor.getScrolledVisiblePosition(e.position);
+                  if (position) {
+                    setCursorPos({ x: position.left, y: position.top });
+                  }
+                });
+              }}
               onChange={(value) => setCode(value || "")}
               theme="vs-dark"
               options={{
@@ -567,15 +618,17 @@ export default function CoachPage() {
 
             <FloatingOrb 
               status={isThinking ? "THINKING" : trackStatus === "ON_TRACK" ? "ON_TRACK" : trackStatus === "OFF_TRACK" ? "OFF_TRACK" : "IDLE"}
-              hint={lastSilentHint}
+              hint={localErrorHint || lastSilentHint}
               isMuted={isMuted}
+              position={cursorPos}
+              opacity={isTyping ? 0.3 : 1}
               onToggleMute={() => saveMute(!isMuted)}
               onClickHelp={() => {
                 if (trackStatus === "OFF_TRACK") {
                   setActiveTab("coach");
-                  if (lastSilentHint) {
-                    setMessages(prev => [...prev, { role: "coach", content: `Coach noticed: ${lastSilentHint}` }]);
-                    setLastSilentHint(""); 
+                  if (localErrorHint || lastSilentHint) {
+                    setMessages(prev => [...prev, { role: "coach", content: `Analysis: ${localErrorHint || lastSilentHint}` }]);
+                    if (!localErrorHint) setLastSilentHint(""); 
                   }
                 }
               }}

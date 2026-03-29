@@ -7,12 +7,17 @@ interface FloatingOrbProps {
   status: "ON_TRACK" | "OFF_TRACK" | "IDLE" | "THINKING" | null;
   hint?: string;
   isMuted: boolean;
+  position?: { x: number; y: number };
+  opacity?: number;
   onToggleMute: () => void;
   onClickHelp: () => void;
 }
 
-export function FloatingOrb({ status, hint, isMuted, onToggleMute, onClickHelp }: FloatingOrbProps) {
+export function FloatingOrb({ status, hint, isMuted, position, opacity = 1, onToggleMute, onClickHelp }: FloatingOrbProps) {
   const [isHovered, setIsHovered] = useState(false);
+
+  // Hover auto-show for hint
+  const showHint = isHovered && hint && !isMuted;
 
   const getStatusColor = () => {
     if (isMuted) return "bg-gray-800 border-gray-700 shadow-none grayscale opacity-30";
@@ -31,26 +36,42 @@ export function FloatingOrb({ status, hint, isMuted, onToggleMute, onClickHelp }
   };
 
   return (
-    <div 
-      className="absolute bottom-6 right-6 flex flex-col items-end gap-3 pointer-events-none"
+    <motion.div 
+      initial={false}
+      animate={{
+        // Follow cursor with a small offset to the right and slightly above
+        x: position ? position.x + 20 : 0,
+        y: position ? position.y - 20 : 0,
+        opacity: position ? opacity : 0
+      }}
+      transition={{ type: "spring", damping: 30, stiffness: 150 }}
+      className="absolute top-0 left-0 z-[999] flex flex-col items-start gap-2 pointer-events-auto"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <AnimatePresence>
-        {hint && status === "OFF_TRACK" && !isMuted && (
+        {showHint && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            className="pointer-events-auto bg-[#080808]/90 backdrop-blur-md border border-[#ef4444]/20 px-3 py-2 rounded-xl text-[10px] text-[#ef4444] font-bold max-w-[180px] shadow-2xl"
+            initial={{ opacity: 0, scale: 0.9, x: -10 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.9, x: -10 }}
+            className="pointer-events-auto bg-[#080808]/90 backdrop-blur-xl border border-white/5 p-3 rounded-2xl text-[11px] text-[#f5f5f5] font-medium min-w-[200px] shadow-2xl ring-1 ring-white/10"
           >
-            <span className="opacity-60 block uppercase text-[8px] mb-1 font-black tracking-widest text-[#ef4444]">
-              ALEX ASKS
-            </span>
-            {hint}
-            <div className="mt-1.5 pt-1.5 border-t border-[#ef4444]/10 text-[9px] opacity-70 italic">
-              Click to see why
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${status === "ON_TRACK" ? "bg-[#84cc16]" : "bg-[#ef4444]"}`} />
+              <span className={`uppercase text-[9px] font-black tracking-widest ${status === "ON_TRACK" ? "text-[#84cc16]" : "text-[#ef4444]"}`}>
+                {status === "ON_TRACK" ? "Correct Path" : "Coach Advice"}
+              </span>
             </div>
+            <p className="leading-relaxed opacity-90">{hint}</p>
+            {status === "OFF_TRACK" && (
+              <button 
+                onClick={onClickHelp}
+                className="mt-2 w-full text-center py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors"
+              >
+                Discuss with Coach
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -59,53 +80,38 @@ export function FloatingOrb({ status, hint, isMuted, onToggleMute, onClickHelp }
         <motion.button
           onClick={onClickHelp}
           animate={{
-            y: [0, -4, 0],
-            rotate: status === "THINKING" ? [0, 180, 360] : 0
+            y: [0, -2, 0],
+            rotate: status === "THINKING" ? [0, 90, 180, 270, 360] : 0
           }}
           transition={{
-            y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
-            rotate: { duration: 2, repeat: Infinity, ease: "linear" }
+            y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+            rotate: { duration: 3, repeat: Infinity, ease: "linear" }
           }}
-          className={`relative w-12 h-12 rounded-full border-2 backdrop-blur-md flex items-center justify-center transition-all duration-500 overflow-hidden ${getStatusColor()} ${
-            status === "OFF_TRACK" ? "cursor-help active:scale-90" : "cursor-default"
+          className={`relative w-9 h-9 rounded-full border border-white/10 backdrop-blur-md flex items-center justify-center transition-all duration-500 overflow-hidden ${getStatusColor()} ${
+            status === "OFF_TRACK" ? "cursor-help active:scale-95" : "cursor-default"
           }`}
         >
-          {/* Internal Glow */}
-          <div className={`absolute inset-0 opacity-20 blur-xl ${getOrbColor()}`} />
-          
           {/* Core Orb */}
           <motion.div 
             animate={{
-              scale: status === "THINKING" ? [1, 1.2, 1] : status === "OFF_TRACK" ? [1, 1.1, 1] : 1,
-              opacity: isMuted ? 0.3 : 1
+              scale: status === "THINKING" ? [1, 1.3, 1] : 1,
+              boxShadow: status === "OFF_TRACK" ? "0 0 15px rgba(239,68,68,0.5)" : "none"
             }}
-            transition={{ duration: 1, repeat: Infinity }}
-            className={`w-3 h-3 rounded-full relative z-10 ${getOrbColor()} shadow-[0_0_10px_currentColor]`}
+            className={`w-2 h-2 rounded-full relative z-10 ${getOrbColor()}`}
           />
 
-          {/* Mute Toggle Layer (Top Right) */}
+          {/* Mute Toggle */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleMute();
             }}
-            className="absolute top-0 right-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 text-[8px] text-white"
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 bg-black/40 rounded-full"
           >
-            {isMuted ? "🔈" : "🔇"}
+            <span className="text-[10px]">{isMuted ? "🔈" : "🔇"}</span>
           </button>
         </motion.button>
-        
-        {/* Status Label (Hover) */}
-        {!isMuted && isHovered && (
-          <motion.div 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="absolute right-14 top-1/2 -translate-y-1/2 whitespace-nowrap bg-black/80 backdrop-blur-md px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest text-white/50 border border-white/10"
-          >
-            {isMuted ? "MUTED" : status || "LISTENING"}
-          </motion.div>
-        )}
       </div>
-    </div>
+    </motion.div>
   );
 }
