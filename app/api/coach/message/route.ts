@@ -3,95 +3,77 @@ import { getProblemBySlug } from "@/lib/problems";
 
 export const runtime = "edge";
 
-const STEP_INSTRUCTIONS: Record<number, string> = {
-  1: `STEP 1 — UNDERSTAND
-You are helping the user understand the problem. Ask them: "In your own words, what is this problem really asking?" 
-If they explain it well, praise them and say "Great, let's move on to thinking about an approach."
-If they're off track, gently rephrase the problem for them.
-Keep it conversational, 2-3 sentences max.`,
-
-  2: `STEP 2 — APPROACH
-Ask: "How would you solve this if you had to explain it to a friend? Brute force is fine to start."
-If they suggest brute force, ask about time complexity and whether we can do better.
-If they suggest the optimal approach, praise them specifically.
-Do NOT name the optimal approach unless they ask for "Show me".
-Keep it to 2-4 sentences.`,
-
-  3: `STEP 3 — DATA STRUCTURE
-Ask: "What data structure would help us here? Think about what operations we need to be fast."
-Guide them toward the right choice through questions about lookup time, ordering, etc.
-Do NOT reveal the answer unless they explicitly ask for "Show me".
-Keep it to 2-3 sentences.`,
-
-  4: `STEP 4 — BUILD (Step-by-Step Coding)
-This is the core teaching phase. Break the solution into micro-steps.
-For each micro-step, tell the user WHAT needs to happen next (e.g., "Now we need to initialize our hash map") but do NOT write the code unless they say "Show me".
-If they say "I got it", wait for them to write code and then validate it.
-If they say "Show me", provide ONLY the code for this one micro-step, nothing more. Format code in a code block.
-After each micro-step is done, move to the next one.
-Keep descriptions to 1-2 sentences per micro-step.`,
-
-  5: `STEP 5 — EDGE CASES
-Ask: "What edge cases should we handle? Think about empty inputs, single elements, duplicates, very large inputs."
-For each edge case they miss, hint at it. For example: "What if the array is empty?" or "What if there are duplicate values?"
-Keep it brief — list format is fine.`,
-
-  6: `STEP 6 — REVIEW
-Review their complete solution. Cover:
-1. Time complexity (Big O)
-2. Space complexity
-3. What they did well
-4. One thing they could improve
-5. Common follow-up interview questions for this problem
-Be encouraging but honest. This is the debrief.`,
-};
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { problem_slug, messages, step, action, code, buildSubStep } = body;
+    const { 
+      problem_slug, 
+      messages, 
+      mode, 
+      hint_level, 
+      attempts, 
+      time_spent, 
+      code,
+      mistakes_detected 
+    } = body;
 
     const problem = getProblemBySlug(problem_slug);
     if (!problem) {
       return new Response("Problem not found", { status: 404 });
     }
 
-    const currentStep = step || 1;
-
-    // Build the system prompt based on current step
-    const systemPrompt = `You are Alex, a Socratic coding coach for FAANG interview prep. You guide users step-by-step through solving problems — you do NOT give away answers.
+    const systemPrompt = `You are an AI coding coach integrated inside a LeetCode-style platform.
+Your role is NOT to solve problems. Your role is to guide the user step-by-step like a coach sitting beside them.
 
 Problem: ${problem.title}
-Difficulty: ${problem.difficulty}
-Topics: ${problem.topics.join(", ")}
-Coach context (NEVER reveal directly): ${problem.coach_context}
+Context: ${problem.coach_context}
 
-${STEP_INSTRUCTIONS[currentStep] || STEP_INSTRUCTIONS[1]}
+## CORE RULES
+* Never give the full solution unless explicitly told MODE: ENDGAME
+* Never dump complete code
+* Keep responses short (1–3 sentences ideally)
+* Adapt to user’s current progress
+* Only give the NEXT SMALL HINT, not all at once
+* Prefer questions over statements
 
-${action === "show_me" ? `
-IMPORTANT: The user clicked "Show me". For this ONE micro-step only, provide the actual code snippet. Keep it minimal — just the code for this specific part, not the full solution.
-${currentStep === 4 && buildSubStep ? `Current build sub-step: ${buildSubStep}` : ""}
-` : ""}
+## MODES
+Current Mode: ${mode || 'CODING'}
+Hint Level: ${hint_level || 1}
+Attempts: ${attempts || 0}
+Time Spent: ${time_spent || 0}s
+Mistakes Detected: ${mistakes_detected?.join(', ') || 'None'}
 
-${action === "explain_more" ? `
-The user wants more explanation. Go deeper on the current concept. Use an analogy if helpful. Still don't give away the answer.
-` : ""}
+### Behavior per Mode:
+1. CODING:
+   - User is actively writing. If they are on track, do not interrupt (or offer subtle encouragement).
+   - If going wrong, give a small directional hint ONLY. Do NOT mention full approach.
+2. HINT_REQUEST:
+   - Level 1: Direction | Level 2: Strategy | Level 3: Data Structure | Level 4: Pseudocode idea | Level 5: Almost solution.
+   - Only give content for THAT level.
+3. EXPLAIN_PROBLEM:
+   - Step 1: Simplify in English | Step 2: Walk through example | Step 3: Ask guiding question | Step 4: Suggest thinking direction.
+   - STOP after each step and wait for user.
+4. DEBUG:
+   - Explain error in simple terms, point to location, ask guiding question.
+5. GIVE_UP:
+   - Provide full approach, clean solution code, and step-by-step explanation.
+6. ENDGAME:
+   - This is the reflection phase after showing the solution. Ask a reflection question.
 
 ${code ? `\nUser's current code:\n\`\`\`\n${code}\n\`\`\`` : ""}
 
-Rules:
-- Keep responses SHORT (2-4 sentences unless doing a code review in step 6)
-- Never give the full solution at once
-- Praise specific correct thinking
-- When correcting, don't say "wrong" — ask "what happens when..."
-- Your name is Alex
-- On your very first message, sign off: "— Alex"`;
+Tone: Short, Clear, Encouraging, Not robotic.
+Name: Alex (Always sign off first message with — Alex)
 
-    // Build messages for the LLM
+CRITICAL: Every response MUST start with either [STATUS: ON_TRACK] or [STATUS: OFF_TRACK] followed by your message.
+- Use ON_TRACK if the user's code/logic is correct or moving in a good direction.
+- Use OFF_TRACK if they are making a logic mistake, using the wrong data structure, or missing an edge case.`;
+
+    // Map messages for OpenRouter
     const llmMessages = [
       {
         role: "user",
-        content: `[Instructions for Alex the coach]: ${systemPrompt}\n\n[Begin session]`,
+        content: `[COACH GUIDELINES]: ${systemPrompt}\n\n[Start conversation]`,
       },
       ...messages.map((m: { role: string; content: string }) => ({
         role: m.role === "coach" ? "assistant" : "user",
@@ -99,12 +81,14 @@ Rules:
       })),
     ];
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return new Response("API key not configured", { status: 500 });
-    }
+    let apiKey = process.env.ANTHROPIC_API_KEY;
+    let apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+    let model = "nvidia/nemotron-3-nano-30b-a3b:free";
+    let isFallback = false;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    if (!apiKey) return new Response("API key not configured", { status: 500 });
+
+    let response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -113,7 +97,7 @@ Rules:
         "X-Title": "crackeddev",
       },
       body: JSON.stringify({
-        model: "nvidia/nemotron-3-nano-30b-a3b:free",
+        model,
         messages: llmMessages,
         stream: true,
         max_tokens: 1024,
@@ -121,35 +105,47 @@ Rules:
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter error:", errorText);
-      return new Response("Coach temporarily unavailable", { status: 502 });
+    // --- FALLBACK TO GROQ ---
+    if (!response.ok && process.env.GROQ_API_KEY) {
+      console.log("Switching to GROQ fallback...");
+      isFallback = true;
+      apiKey = process.env.GROQ_API_KEY;
+      apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+      model = "llama-3.3-70b-versatile"; // High quality Groq model
+
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: llmMessages,
+          stream: true,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
     }
 
-    // Stream the SSE response back
-    const encoder = new TextEncoder();
+    if (!response.ok) return new Response("Coach temporarily unavailable", { status: 502 });
 
+    const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        if (isFallback) controller.enqueue(encoder.encode("[FALLBACK_INIT] "));
         const reader = response.body?.getReader();
-        if (!reader) {
-          controller.close();
-          return;
-        }
-
+        if (!reader) return controller.close();
         const decoder = new TextDecoder();
         let buffer = "";
-
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
-
             for (const line of lines) {
               if (line.startsWith("data: ")) {
                 const data = line.slice(6).trim();
@@ -157,17 +153,11 @@ Rules:
                 try {
                   const json = JSON.parse(data);
                   const content = json.choices?.[0]?.delta?.content;
-                  if (content) {
-                    controller.enqueue(encoder.encode(content));
-                  }
-                } catch {
-                  // skip invalid JSON
-                }
+                  if (content) controller.enqueue(encoder.encode(content));
+                } catch {}
               }
             }
           }
-        } catch (err) {
-          console.error("Stream error:", err);
         } finally {
           controller.close();
         }
@@ -175,13 +165,9 @@ Rules:
     });
 
     return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-      },
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" },
     });
   } catch (err) {
-    console.error("Coach API error:", err);
     return new Response("Internal server error", { status: 500 });
   }
 }

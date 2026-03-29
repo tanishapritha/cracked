@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { getProblemBySlug } from "@/lib/problems";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { ChatMessage, CoachStep } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 import { STEP_LABELS } from "@/lib/types";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
@@ -29,18 +29,22 @@ export default function CoachPage() {
   const { slug } = useParams<{ slug: string }>();
   const problem = getProblemBySlug(slug);
 
-  const [step, setStep] = useState<CoachStep>(1);
+  const [mode, setMode] = useState<"CODING" | "HINT_REQUEST" | "EXPLAIN_PROBLEM" | "DEBUG" | "GIVE_UP" | "ENDGAME">("CODING");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [language, setLanguage] = useState<"python" | "javascript" | "java">("python");
+  const [language, setLanguage] = useState<"python" | "javascript" | "java" | "cpp">("cpp");
   const [code, setCode] = useState("");
   const [timer, setTimer] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [sessionStartTime] = useState(Date.now());
   const [sessionEnded, setSessionEnded] = useState(false);
   const [showProblem, setShowProblem] = useState(true);
-  const [buildSubStep, setBuildSubStep] = useState(1);
+  const [hintLevel, setHintLevel] = useState(1);
+  const [attempts, setAttempts] = useState(0);
+  const [trackStatus, setTrackStatus] = useState<"ON_TRACK" | "OFF_TRACK" | null>(null);
+  const [isCheckingTrack, setIsCheckingTrack] = useState(false);
+  const [apiError, setApiError] = useState(false);
 
   // Mobile tab
   const [activeTab, setActiveTab] = useState<"coach" | "code">("coach");
@@ -65,7 +69,7 @@ export default function CoachPage() {
     return () => clearInterval(interval);
   }, [timerActive]);
 
-  // Kick off step 1 automatically
+  // Kick off intro
   useEffect(() => {
     if (problem && messages.length === 0) {
       const intro: ChatMessage = {
@@ -74,13 +78,12 @@ export default function CoachPage() {
         content: "",
       };
       setMessages([intro]);
-      // Auto-send the first coach message
-      sendToCoach("Let's start. Help me understand this problem.", "understand");
+      sendToCoach("I'm ready to learn. Explain the problem to me first.", "EXPLAIN_PROBLEM");
     }
   }, [problem]);
 
   const sendToCoach = useCallback(
-    async (content: string, action?: string) => {
+    async (content: string, overrideMode?: typeof mode) => {
       if (isStreaming || !problem) return;
 
       const userMsg: ChatMessage = { role: "user", content };
@@ -89,6 +92,8 @@ export default function CoachPage() {
       setInput("");
       setIsStreaming(true);
 
+      const currentMode = overrideMode || mode;
+
       try {
         const response = await fetch("/api/coach/message", {
           method: "POST",
@@ -96,10 +101,11 @@ export default function CoachPage() {
           body: JSON.stringify({
             problem_slug: slug,
             messages: updatedMessages.filter((m) => m.type !== "problem-intro"),
-            step,
-            action: action || "chat",
-            code: step >= 4 ? code : undefined,
-            buildSubStep: step === 4 ? buildSubStep : undefined,
+            mode: currentMode,
+            hint_level: hintLevel,
+            attempts,
+            time_spent: timer,
+            code: code,
           }),
         });
 
@@ -122,67 +128,58 @@ export default function CoachPage() {
 
           setMessages((prev) => {
             const updated = [...prev];
-            updated[updated.length - 1] = { role: "coach", content: coachContent };
+            let strippedContent = coachContent;
+            
+            // Extract Status Tag and Strip it
+            if (coachContent.includes("[STATUS: ON_TRACK]")) {
+              setTrackStatus("ON_TRACK");
+              strippedContent = coachContent.replace("[STATUS: ON_TRACK]", "").trim();
+            } else if (coachContent.includes("[STATUS: OFF_TRACK]")) {
+              setTrackStatus("OFF_TRACK");
+              strippedContent = coachContent.replace("[STATUS: OFF_TRACK]", "").trim();
+            }
+
+            updated[updated.length - 1] = { role: "coach", content: strippedContent };
             return updated;
           });
         }
-      } catch {
-        toast.error("Coach is temporarily unavailable. Try again.");
-        setMessages((prev) => prev.filter((m) => m.content !== ""));
+      } catch (err) {
+        setApiError(true);
+        setMessages((prev) => [
+          ...prev.filter((m) => m.content !== ""),
+          {
+            role: "coach",
+            content: "⚠️ **Our AI key is currently exhausted or rate-limited.**\n\nTo continue your session without interruption, you can add your own free API key in your settings (coming soon) or directly in your environment. \n\n**Get a free key here:**\n- [Gemini (Google) Key](https://aistudio.google.com/app/apikey)\n- [Groq AI Key](https://console.groq.com/keys)\n- [OpenRouter Key](https://openrouter.ai/keys)\n\nWe apologize for the interruption! — Alex",
+          },
+        ]);
+        toast.error("Coach rate-limited. Add your own key to continue.");
       } finally {
         setIsStreaming(false);
       }
     },
-    [isStreaming, problem, messages, step, slug, code, buildSubStep]
+    [isStreaming, problem, messages, slug, mode, hintLevel, attempts, timer, code]
   );
 
-  // Action handlers
-  const handleIGotIt = () => {
-    if (step < 4) {
-      sendToCoach("I understand this part. Let's move to the next step.");
-      advanceStep();
-    } else if (step === 4) {
-      sendToCoach("I got it, I'll write this part now.");
-      setActiveTab("code");
-      if (!timerActive) setTimerActive(true);
-    }
+  const handleHint = () => {
+    setMode("HINT_REQUEST");
+    sendToCoach("I'd like a hint, please.", "HINT_REQUEST");
+    setHintLevel(Math.min(5, hintLevel + 1));
   };
 
-  const handleShowMe = () => {
-    sendToCoach(
-      step === 4
-        ? `Show me the code for this step (build sub-step ${buildSubStep}).`
-        : "Show me — I'm stuck on this part.",
-      "show_me"
-    );
+  const handleExplain = () => {
+    setMode("EXPLAIN_PROBLEM");
+    sendToCoach("Can you explain the problem to me?", "EXPLAIN_PROBLEM");
   };
 
-  const handleExplainMore = () => {
-    sendToCoach("Can you explain this more? I'm not fully getting it.", "explain_more");
+  const handleDebug = () => {
+    setMode("DEBUG");
+    setAttempts(a => a + 1);
+    sendToCoach("My code isn't working. Can you help me debug it?", "DEBUG");
   };
 
-  const handleDoneWithStep = () => {
-    if (step === 4) {
-      setBuildSubStep((s) => s + 1);
-      sendToCoach(`I've written the code for this part. What's the next step?`);
-    } else {
-      advanceStep();
-      sendToCoach("I'm done with this step. Let's continue.");
-    }
-  };
-
-  const handleSkipToCode = () => {
-    setStep(4);
-    setTimerActive(true);
-    sendToCoach("I want to skip ahead and start coding. Guide me through building the solution step by step.");
-  };
-
-  const advanceStep = () => {
-    if (step < 6) {
-      const next = (step + 1) as CoachStep;
-      setStep(next);
-      if (next === 4) setTimerActive(true);
-    }
+  const handleGiveUp = () => {
+    setMode("GIVE_UP");
+    sendToCoach("I give up. Show me the full solution.", "GIVE_UP");
   };
 
   const endSession = async (solved: boolean) => {
@@ -191,14 +188,13 @@ export default function CoachPage() {
 
     const durationSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
 
-    if (step < 6) {
-      setStep(6);
-      await sendToCoach(
-        solved
-          ? "I think I've got a working solution. Can you review my code?"
-          : "I'm stuck. Can you debrief me on this problem and show me what I missed?"
-      );
-    }
+    setMode("ENDGAME");
+    await sendToCoach(
+      solved
+        ? "I think I've got it!"
+        : "I'm wrapping up this session.",
+      "ENDGAME"
+    );
 
     try {
       await fetch("/api/session/complete", {
@@ -206,8 +202,8 @@ export default function CoachPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           problem_slug: slug,
-          stage_reached: step,
-          hints_used: 0,
+          stage_reached: mode === "GIVE_UP" ? 6 : 4,
+          hints_used: hintLevel - 1,
           duration_seconds: durationSeconds,
           solved,
         }),
@@ -232,234 +228,179 @@ export default function CoachPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col md:flex-row bg-black">
-      {/* Mobile tabs */}
-      <div className="md:hidden flex border-b-2 border-[#1a1a1a] bg-[#050505]">
-        <button
-          onClick={() => setActiveTab("coach")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
-            activeTab === "coach"
-              ? "text-[#84cc16] border-b-2 border-[#84cc16]"
-              : "text-[#525252]"
-          }`}
-        >
-          Coach
-        </button>
-        <button
-          onClick={() => setActiveTab("code")}
-          className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
-            activeTab === "code"
-              ? "text-[#84cc16] border-b-2 border-[#84cc16]"
-              : "text-[#525252]"
-          }`}
-        >
-          Code
-        </button>
-      </div>
-
-      {/* ============ LEFT: COACH PANEL ============ */}
-      <div
-        className={`w-full md:w-1/2 border-r-2 border-[#1a1a1a] flex flex-col bg-[#050505] ${
-          activeTab === "coach" ? "flex" : "hidden md:flex"
-        }`}
-      >
-        {/* Step tracker */}
-        <div className="px-4 py-3 border-b-2 border-[#1a1a1a] bg-[#080808]">
-          <div className="flex items-center gap-1">
-            {([1, 2, 3, 4, 5, 6] as CoachStep[]).map((s) => (
-              <button
-                key={s}
-                disabled
-                className={`flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
-                  s === step
-                    ? "bg-[#84cc16] text-black"
-                    : s < step
-                    ? "bg-[#1a1a1a] text-[#84cc16]"
-                    : "bg-[#0a0a0a] text-[#333333]"
-                }`}
-              >
-                <span className="w-4 h-4 flex items-center justify-center text-[9px] font-black border border-current/30">
-                  {s < step ? "✓" : s}
-                </span>
-                <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
-              </button>
-            ))}
-          </div>
+    <div className="h-[calc(100vh-3.5rem)] bg-black p-4 lg:p-6">
+      <div className="h-full flex flex-col md:flex-row gap-4 lg:gap-6 overflow-hidden">
+        {/* Mobile tabs */}
+        <div className="md:hidden flex rounded-xl border border-[#1a1a1a] bg-[#050505] overflow-hidden shrink-0">
+          <button
+            onClick={() => setActiveTab("coach")}
+            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              activeTab === "coach"
+                ? "text-[#84cc16] bg-[#84cc16]/5 border-b-2 border-[#84cc16]"
+                : "text-[#525252]"
+            }`}
+          >
+            Coach
+          </button>
+          <button
+            onClick={() => setActiveTab("code")}
+            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              activeTab === "code"
+                ? "text-[#84cc16] bg-[#84cc16]/5 border-b-2 border-[#84cc16]"
+                : "text-[#525252]"
+            }`}
+          >
+            Code
+          </button>
         </div>
 
-        {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              {msg.type === "problem-intro" ? (
-                <div className="bg-[#080808] border border-[#1a1a1a] p-4 w-full space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-[#f5f5f5]">
-                      {problem.title}
-                    </h2>
-                    <Badge
-                      variant="outline"
-                      className={`text-[9px] font-bold uppercase tracking-wider ${
-                        difficultyColors[problem.difficulty]
-                      } border-current/20`}
-                    >
-                      {problem.difficulty}
-                    </Badge>
-                  </div>
-                  <button
-                    onClick={() => setShowProblem(!showProblem)}
-                    className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors uppercase tracking-widest font-bold"
-                  >
-                    {showProblem ? "▼ Hide problem" : "▶ Show problem"}
-                  </button>
-                  {showProblem && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-[#d4d4d4] leading-relaxed whitespace-pre-wrap">
-                        {problem.description}
-                      </p>
-                      {problem.examples?.map((ex: any, j: number) => (
-                        <div key={j} className="bg-[#0a0a0a] border border-[#1a1a1a] p-3 font-mono text-xs text-[#a3a3a3] space-y-1">
-                          <div>
-                            <span className="text-[#525252]">Input: </span>
-                            {ex.input}
-                          </div>
-                          <div>
-                            <span className="text-[#525252]">Output: </span>
-                            {ex.output}
-                          </div>
-                        </div>
-                      ))}
-                      <a
-                        href={problem.lc_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors"
-                      >
-                        View on LeetCode ↗
-                      </a>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-[#84cc16]/8 text-[#e5e5e5] border border-[#84cc16]/15"
-                      : "bg-[#111111] text-[#e5e5e5] border border-[#1a1a1a]"
-                  }`}
-                >
-                  {msg.role === "coach" && (
-                    <div className="text-[9px] font-bold text-[#84cc16] uppercase tracking-widest mb-1.5">
-                      Alex
-                    </div>
-                  )}
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
-                </div>
-              )}
+        {/* ============ LEFT: COACH PANEL ============ */}
+        <div
+          className={`w-full md:w-1/2 border border-[#1a1a1a] flex flex-col bg-[#050505] rounded-2xl overflow-hidden shadow-2xl relative ${
+            activeTab === "coach" ? "flex" : "hidden md:flex"
+          }`}
+        >
+          {/* Hint Tracker */}
+          <div className="px-6 py-4 border-b border-[#1a1a1a] bg-[#080808]">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex gap-1.5 flex-1">
+                {[1, 2, 3, 4, 5].map((l) => (
+                  <div 
+                    key={l} 
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${l < hintLevel ? 'bg-[#84cc16]' : l === hintLevel ? 'bg-[#84cc16]/30' : 'bg-[#1a1a1a]'}`} 
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#525252]">
+                Hint level {hintLevel}
+              </span>
             </div>
-          ))}
-          {isStreaming && (
-            <div className="flex justify-start">
-              <div className="bg-[#111111] border border-[#1a1a1a] px-4 py-3 text-sm">
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse" />
-                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-150" />
-                  <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-300" />
+          </div>
+
+          {/* Chat messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                {msg.type === "problem-intro" ? (
+                  <div className="bg-[#080808] border border-[#1a1a1a] p-4 w-full space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-bold text-[#f5f5f5]">
+                        {problem.title}
+                      </h2>
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] font-bold uppercase tracking-wider ${
+                          difficultyColors[problem.difficulty]
+                        } border-current/20`}
+                      >
+                        {problem.difficulty}
+                      </Badge>
+                    </div>
+                    <button
+                      onClick={() => setShowProblem(!showProblem)}
+                      className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors uppercase tracking-widest font-bold"
+                    >
+                      {showProblem ? "▼ Hide problem" : "▶ Show problem"}
+                    </button>
+                    {showProblem && (
+                      <div className="space-y-3">
+                        <p className="text-sm text-[#d4d4d4] leading-relaxed whitespace-pre-wrap">
+                          {problem.description}
+                        </p>
+                        {problem.examples?.map((ex: any, j: number) => (
+                          <div key={j} className="bg-[#0a0a0a] border border-[#1a1a1a] p-3 font-mono text-xs text-[#a3a3a3] space-y-1">
+                            <div>
+                              <span className="text-[#525252]">Input: </span>
+                              {ex.input}
+                            </div>
+                            <div>
+                              <span className="text-[#525252]">Output: </span>
+                              {ex.output}
+                            </div>
+                          </div>
+                        ))}
+                        <a
+                          href={problem.lc_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-[#525252] hover:text-[#84cc16] transition-colors"
+                        >
+                          View on LeetCode ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-[#84cc16]/8 text-[#e5e5e5] border border-[#84cc16]/15"
+                        : "bg-[#111111] text-[#e5e5e5] border border-[#1a1a1a]"
+                    }`}
+                  >
+                    {msg.role === "coach" && (
+                      <div className="text-[9px] font-bold text-[#84cc16] uppercase tracking-widest mb-1.5">
+                        Alex
+                      </div>
+                    )}
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {isStreaming && (
+              <div className="flex justify-start">
+                <div className="bg-[#111111] border border-[#1a1a1a] px-4 py-3 text-sm">
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse" />
+                    <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-150" />
+                    <span className="w-1.5 h-1.5 bg-[#84cc16] rounded-full animate-pulse delay-300" />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
 
-        {/* ============ ACTION BAR ============ */}
-        <div className="border-t-2 border-[#1a1a1a] bg-[#080808]">
-          {/* Quick action buttons */}
+          {/* ============ ACTION BAR ============ */}
           {!sessionEnded && (
-            <div className="px-4 py-3 flex flex-wrap gap-2">
-              {step <= 3 && (
-                <>
-                  <button
-                    onClick={handleIGotIt}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
-                  >
-                    ✓ I get it
-                  </button>
-                  <button
-                    onClick={handleShowMe}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
-                  >
-                    Show me
-                  </button>
-                  <button
-                    onClick={handleExplainMore}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#1a1a1a] text-[#737373] hover:text-[#e5e5e5] transition-colors disabled:opacity-30"
-                  >
-                    Explain more
-                  </button>
-                  <button
-                    onClick={handleSkipToCode}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#525252] hover:text-[#737373] transition-colors disabled:opacity-30 ml-auto"
-                  >
-                    Skip to code →
-                  </button>
-                </>
-              )}
-              {step === 4 && (
-                <>
-                  <button
-                    onClick={handleIGotIt}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
-                  >
-                    ✓ I got it — let me code
-                  </button>
-                  <button
-                    onClick={handleShowMe}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
-                  >
-                    Show me this step
-                  </button>
-                  <button
-                    onClick={handleDoneWithStep}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#22c55e]/15 text-[#22c55e] border border-[#22c55e]/30 hover:bg-[#22c55e]/25 transition-colors disabled:opacity-30"
-                  >
-                    ✓ Done — next step
-                  </button>
-                </>
-              )}
-              {step === 5 && (
-                <>
-                  <button
-                    onClick={handleIGotIt}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#84cc16] text-black hover:bg-[#a3e635] transition-colors disabled:opacity-30"
-                  >
-                    ✓ I covered the edge cases
-                  </button>
-                  <button
-                    onClick={handleShowMe}
-                    disabled={isStreaming}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 hover:bg-[#f59e0b]/25 transition-colors disabled:opacity-30"
-                  >
-                    What am I missing?
-                  </button>
-                </>
-              )}
+            <div className="px-5 py-4 border-t border-[#1a1a1a] bg-[#080808] flex flex-wrap gap-2.5">
+              <button
+                onClick={handleExplain}
+                disabled={isStreaming}
+                className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#1a1a1a] text-[#737373] hover:text-[#f5f5f5] rounded-lg transition-all border border-transparent hover:border-[#1f1f1f]"
+              >
+                Explain
+              </button>
+              <button
+                onClick={handleHint}
+                disabled={isStreaming || hintLevel > 5}
+                className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20 hover:bg-[#f59e0b]/20 rounded-lg transition-all"
+              >
+                Hint
+              </button>
+              <button
+                onClick={handleDebug}
+                disabled={isStreaming || !code}
+                className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/20 hover:bg-[#3b82f6]/20 rounded-lg transition-all"
+              >
+                Debug
+              </button>
+              <button
+                onClick={handleGiveUp}
+                disabled={isStreaming}
+                className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20 hover:bg-[#ef4444]/20 rounded-lg transition-all ml-auto"
+              >
+                Give Up
+              </button>
             </div>
           )}
 
           {/* Free text input */}
-          <div className="px-4 py-3 border-t border-[#1a1a1a]">
+          <div className="px-4 py-3 border-t border-[#1a1a1a] bg-[#050505]">
             <div className="flex gap-2">
               <textarea
                 ref={inputRef}
@@ -474,12 +415,12 @@ export default function CoachPage() {
                 placeholder={sessionEnded ? "Session ended" : "Ask Alex anything..."}
                 disabled={isStreaming || sessionEnded}
                 rows={1}
-                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-sm px-3 py-2.5 resize-none placeholder:text-[#333333] focus:outline-none focus:border-[#84cc16]/40"
+                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-sm px-4 py-3 rounded-lg resize-none placeholder:text-[#333333] focus:outline-none focus:border-[#84cc16]/40 transition-all font-medium"
               />
               <Button
                 onClick={() => input.trim() && sendToCoach(input.trim())}
                 disabled={!input.trim() || isStreaming || sessionEnded}
-                className="bg-[#84cc16] text-black hover:bg-[#a3e635] font-bold self-end"
+                className="bg-[#84cc16] text-black hover:bg-[#a3e635] font-black h-auto px-6 rounded-lg self-stretch"
                 size="sm"
               >
                 Send
@@ -487,99 +428,113 @@ export default function CoachPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ============ RIGHT: CODE PANEL ============ */}
-      <div
-        className={`w-full md:w-1/2 flex flex-col bg-black ${
-          activeTab === "code" ? "flex" : "hidden md:flex"
-        }`}
-      >
-        {/* Toolbar */}
-        <div className="px-4 py-3 border-b-2 border-[#1a1a1a] flex items-center justify-between bg-[#080808]">
-          <div className="flex items-center gap-3">
-            <select
-              value={language}
-              onChange={(e) =>
-                setLanguage(e.target.value as "python" | "javascript" | "java")
+        {/* ============ RIGHT: CODE PANEL ============ */}
+        <div
+          className={`w-full md:w-1/2 flex flex-col bg-[#050505] border border-[#1a1a1a] rounded-2xl overflow-hidden shadow-2xl ${
+            activeTab === "code" ? "flex" : "hidden md:flex"
+          }`}
+        >
+          {/* Toolbar */}
+          <div className="px-5 py-3.5 border-b border-[#1a1a1a] flex items-center justify-between bg-[#080808]">
+            <div className="flex items-center gap-3">
+              <select
+                value={language}
+                onChange={(e) =>
+                  setLanguage(e.target.value as any)
+                }
+                className="bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-xs px-2.5 py-1.5 focus:outline-none focus:border-[#84cc16]/40 font-bold rounded-md"
+              >
+                <option value="cpp">C++</option>
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+                <option value="java">Java</option>
+              </select>
+              {timerActive && (
+                <span className="text-xs font-mono font-bold text-[#84cc16] bg-[#84cc16]/10 px-2.5 py-1 rounded-full">
+                  {formatTime(timer)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {!sessionEnded && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => endSession(true)}
+                    className="text-[10px] bg-[#84cc16] text-black hover:bg-[#a3e635] font-black uppercase tracking-wider px-4 shadow-[0_0_15px_rgba(132,204,22,0.2)]"
+                  >
+                    Submit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => endSession(false)}
+                    className="text-[10px] border-[#1a1a1a] text-[#525252] hover:text-[#f5f5f5] hover:bg-[#1a1a1a] uppercase font-black tracking-wider px-4"
+                  >
+                    Quit
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Monaco Editor */}
+          <div className="flex-1 relative group">
+            <MonacoEditor
+              height="100%"
+              language={
+                language === "cpp"
+                  ? "cpp"
+                  : language === "python"
+                  ? "python"
+                  : language === "java"
+                  ? "java"
+                  : "javascript"
               }
-              className="bg-[#0a0a0a] border border-[#1a1a1a] text-[#f5f5f5] text-xs px-2.5 py-1.5 focus:outline-none focus:border-[#84cc16]/40 font-bold"
-            >
-              <option value="python">Python</option>
-              <option value="javascript">JavaScript</option>
-              <option value="java">Java</option>
-            </select>
-            {timerActive && (
-              <span className="text-xs font-mono font-bold text-[#84cc16] bg-[#84cc16]/10 px-2.5 py-1">
-                {formatTime(timer)}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {step === 4 && (
-              <span className="text-[10px] font-bold text-[#525252] uppercase tracking-widest mr-2">
-                Build step {buildSubStep}
-              </span>
-            )}
-            {!sessionEnded && (
-              <>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    handleDoneWithStep();
-                    setActiveTab("coach");
-                  }}
-                  className="text-xs bg-[#22c55e] text-black hover:bg-[#22c55e]/90 font-bold"
-                >
-                  ✓ Done
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => endSession(true)}
-                  className="text-xs bg-[#84cc16] text-black hover:bg-[#a3e635] font-bold"
-                >
-                  Submit Solution
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => endSession(false)}
-                  className="text-xs border-[#1a1a1a] text-[#525252] hover:text-[#f5f5f5] hover:bg-[#1a1a1a]"
-                >
-                  Give up
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+              value={code}
+              onChange={(value) => setCode(value || "")}
+              theme="vs-dark"
+              options={{
+                fontSize: 14,
+                fontFamily: "var(--font-geist-mono), monospace",
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                padding: { top: 24, bottom: 24 },
+                lineNumbers: "on",
+                renderLineHighlight: "line",
+                automaticLayout: true,
+                tabSize: 4,
+                wordWrap: "on",
+              }}
+            />
 
-        {/* Monaco Editor */}
-        <div className="flex-1">
-          <MonacoEditor
-            height="100%"
-            language={
-              language === "python"
-                ? "python"
-                : language === "java"
-                ? "java"
-                : "javascript"
-            }
-            value={code}
-            onChange={(value) => setCode(value || "")}
-            theme="vs-dark"
-            options={{
-              fontSize: 14,
-              fontFamily: "var(--font-geist-mono), monospace",
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              padding: { top: 16, bottom: 16 },
-              lineNumbers: "on",
-              renderLineHighlight: "line",
-              automaticLayout: true,
-              tabSize: 4,
-              wordWrap: "on",
-            }}
-          />
+            {/* LIVE PULSE BUBBLE */}
+            <div className="absolute bottom-6 right-6 flex flex-col items-end gap-3 pointer-events-none">
+              {trackStatus && (
+                <div 
+                  className={`pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-full border shadow-2xl transition-all duration-300 transform animate-in fade-in slide-in-from-bottom-2 ${
+                    trackStatus === "ON_TRACK" 
+                      ? "bg-[#84cc16]/10 border-[#84cc16]/30 text-[#84cc16]" 
+                      : "bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444] cursor-help hover:scale-105 active:scale-95"
+                  }`}
+                  onClick={() => trackStatus === "OFF_TRACK" && setActiveTab("coach")}
+                >
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    trackStatus === "ON_TRACK" ? "bg-[#84cc16]" : "bg-[#ef4444]"
+                  }`} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {trackStatus === "ON_TRACK" ? "On Track" : "Wrong Direction"}
+                  </span>
+                  {trackStatus === "OFF_TRACK" && (
+                    <span className="text-[9px] bg-[#ef4444]/20 px-1.5 py-0.5 rounded ml-1 animate-bounce">
+                      Ask Alex
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -30,6 +30,7 @@ export interface Problem {
     python: string;
     javascript: string;
     java: string;
+    cpp: string;
   };
   coach_context: string;
 }

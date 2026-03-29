@@ -24,6 +24,16 @@ export const problems: Problem[] = [
         return new int[]{};
     }
 }`,
+      cpp: `#include <vector>
+using namespace std;
+
+class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        // your code here
+        return {};
+    }
+};`,
     },
     coach_context:
       "Optimal approach uses a hash map for O(n) time. Common mistake: nested loop brute force at O(n^2). Key insight is storing complements (target - current) as you iterate. Watch for off-by-one with returning indices vs values.",
@@ -51,6 +61,17 @@ export const problems: Problem[] = [
         return false;
     }
 }`,
+      cpp: `#include <string>
+#include <stack>
+using namespace std;
+
+class Solution {
+public:
+    bool isValid(string s) {
+        // your code here
+        return false;
+    }
+};`,
     },
     coach_context:
       "Classic stack problem. Push opening brackets, pop and match on closing brackets. Common mistakes: forgetting to check stack is empty at the end, not handling edge case where string starts with a closing bracket. O(n) time, O(n) space.",
@@ -78,6 +99,16 @@ export const problems: Problem[] = [
         return -1;
     }
 }`,
+      cpp: `#include <vector>
+using namespace std;
+
+class Solution {
+public:
+    int search(vector<int>& nums, int target) {
+        // your code here
+        return -1;
+    }
+};`,
     },
     coach_context:
       "Textbook binary search. Key decisions: inclusive vs exclusive bounds, mid calculation (avoid overflow with lo + (hi - lo) / 2). Common mistake: off-by-one errors causing infinite loops. O(log n) time, O(1) space.",
@@ -105,6 +136,17 @@ export const problems: Problem[] = [
         return 0;
     }
 }`,
+      cpp: `#include <vector>
+#include <algorithm>
+using namespace std;
+
+class Solution {
+public:
+    int maxProfit(vector<int>& prices) {
+        // your code here
+        return 0;
+    }
+};`,
     },
     coach_context:
       "Track minimum price seen so far, compute profit at each step. Common mistake: trying to use two-pointer or sorting (destroys temporal order). Key insight: only need one pass, tracking running min. O(n) time, O(1) space.",
@@ -143,6 +185,17 @@ export const problems: Problem[] = [
         return 0;
     }
 }`,
+      cpp: `#include <vector>
+#include <algorithm>
+using namespace std;
+
+class Solution {
+public:
+    int maxSubArray(vector<int>& nums) {
+        // your code here
+        return 0;
+    }
+};`,
     },
     coach_context:
       "Kadane's algorithm: maintain current sum, reset to 0 when it goes negative. Common mistake: initializing max to 0 instead of negative infinity (fails for all-negative arrays). O(n) time, O(1) space. Follow-up: divide and conquer approach at O(n log n).",
@@ -170,6 +223,16 @@ export const problems: Problem[] = [
         return 0;
     }
 }`,
+      cpp: `#include <vector>
+using namespace std;
+
+class Solution {
+public:
+    int numIslands(vector<vector<char>>& grid) {
+        // your code here
+        return 0;
+    }
+};`,
     },
     coach_context:
       "BFS or DFS from each unvisited '1', marking visited cells. Count how many times you start a new traversal. Common mistakes: forgetting to mark cells as visited (infinite loop), not handling grid boundaries. O(m*n) time and space.",
@@ -197,6 +260,17 @@ export const problems: Problem[] = [
         return -1;
     }
 }`,
+      cpp: `#include <vector>
+#include <algorithm>
+using namespace std;
+
+class Solution {
+public:
+    int coinChange(vector<int>& coins, int amount) {
+        // your code here
+        return -1;
+    }
+};`,
     },
     coach_context:
       "Bottom-up DP: dp[i] = min coins to make amount i. Fill from 1 to amount. For each amount, try each coin. Common mistake: greedy approach (fails for coins like [1,3,4] amount=6). O(amount * coins) time, O(amount) space.",
@@ -251,6 +325,23 @@ export const problems: Problem[] = [
         // your code here
     }
 }`,
+      cpp: `#include <unordered_map>
+using namespace std;
+
+class LRUCache {
+public:
+    LRUCache(int capacity) {
+        
+    }
+    
+    int get(int key) {
+        return -1;
+    }
+    
+    void put(int key, int value) {
+        
+    }
+};`,
     },
     coach_context:
       "Doubly linked list + hash map. Hash map gives O(1) lookup, linked list gives O(1) insert/remove for ordering. Common mistake: only using one data structure (can't get O(1) for both ops). Key insight: sentinel head/tail nodes simplify edge cases dramatically.",
@@ -278,6 +369,17 @@ export const problems: Problem[] = [
         return false;
     }
 }`,
+      cpp: `#include <vector>
+#include <string>
+using namespace std;
+
+class Solution {
+public:
+    bool exist(vector<vector<char>>& board, string word) {
+        // your code here
+        return false;
+    }
+};`,
     },
     coach_context:
       "Backtracking DFS from each cell. Mark cells as visited during recursion, unmark on backtrack. Common mistakes: not restoring the board state when backtracking, checking bounds after accessing (index out of range). Pruning: check if remaining board has enough characters. O(m*n*4^L) worst case.",
@@ -345,6 +447,27 @@ export const problems: Problem[] = [
         return false;
     }
 }`,
+      cpp: `#include <string>
+using namespace std;
+
+class Trie {
+public:
+    Trie() {
+        
+    }
+    
+    void insert(string word) {
+        
+    }
+    
+    bool search(string word) {
+        return false;
+    }
+    
+    bool startsWith(string prefix) {
+        return false;
+    }
+};`,
     },
     coach_context:
       "Each node has a map of children (char -> node) and an isEnd flag. Insert: walk/create nodes per character. Search vs startsWith: only difference is checking isEnd at the terminal node. Common mistake: confusing the two. O(L) for all operations where L = word length.",
@@ -387,6 +510,17 @@ export const problems: Problem[] = [
         return 0;
     }
 }`,
+      cpp: `#include <vector>
+#include <algorithm>
+using namespace std;
+
+class Solution {
+public:
+    int findContentChildren(vector<int>& g, vector<int>& s) {
+        // your code here
+        return 0;
+    }
+};`,
     },
     coach_context:
       "Sorting + Two-pointer greedy approach. Sort both greed and cookie size arrays. Use two pointers to iterate. If the current cookie satisfies the current child, increment both. Otherwise, try the next larger cookie for the same child. O(n log n) due to sorting.",
