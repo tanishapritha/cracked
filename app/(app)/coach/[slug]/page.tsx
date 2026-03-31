@@ -92,19 +92,21 @@ export default function CoachPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Token-Efficient Background Check
-  const lastCheckedCodeRef = useRef("");
+  // Token-Efficient Background Check (Line-Based)
+  const lastLineCountRef = useRef(0);
   useEffect(() => {
     if (sessionEnded || mode !== "CODING" || isStreaming || !code || isMuted || localErrorHint) return;
-    if (code === lastCheckedCodeRef.current) return;
-
+    
+    const currentLineCount = code.split('\n').length;
+    if (currentLineCount === lastLineCountRef.current) return;
+    
     const pulseInterval = setTimeout(() => {
-      lastCheckedCodeRef.current = code;
+      lastLineCountRef.current = currentLineCount;
       const lines = code.split('\n');
       const recentLines = lines.length > 30 ? lines.slice(-30).join('\n') : code;
       
       sendToCoach("[BACKGROUND_CHECK]", "CODING", recentLines);
-    }, 10000); // 10s gap to save Free-Tier tokens🥂🚀
+    }, 2000); // 2s gap after line-change to allow for quick typing
 
     return () => clearTimeout(pulseInterval);
   }, [code, isStreaming, sessionEnded, mode, isMuted, localErrorHint]);

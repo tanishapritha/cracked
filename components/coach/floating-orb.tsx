@@ -19,23 +19,24 @@ export function FloatingOrb({ status, hint, isMuted, position, opacity = 1, onTo
   // Hover auto-show for hint
   const showHint = isHovered && hint && !isMuted;
 
-  // Temperature logic
+  // Thermal Logic
   const isSyntaxOff = hint?.includes("(Local)");
   const isLogicOff = status === "OFF_TRACK" && !isSyntaxOff;
+  const isPerfect = status === "ON_TRACK" && !isSyntaxOff;
 
   const getStatusColor = () => {
-    if (isMuted) return "bg-gray-800 border-gray-700 opacity-30";
-    if (status === "THINKING") return "bg-blue-500/20 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.3)]";
-    if (status === "ON_TRACK") return "bg-green-500/20 border-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.3)]";
-    if (isSyntaxOff) return "bg-amber-500/20 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.3)]";
-    if (isLogicOff) return "bg-red-500/20 border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.3)]";
+    if (isMuted) return "bg-gray-800 border-gray-700 opacity-20 grayscale";
+    if (status === "THINKING") return "bg-blue-500/20 border-blue-500/40 shadow-[0_0_30px_rgba(59,130,246,0.3)]";
+    if (isPerfect) return "bg-[#84cc16]/20 border-[#84cc16]/40 shadow-[0_0_30px_rgba(132,204,22,0.4)] transition-all duration-1000";
+    if (isSyntaxOff) return "bg-amber-500/20 border-amber-500/40 shadow-[0_0_30px_rgba(245,158,11,0.4)] transition-all duration-500";
+    if (isLogicOff) return "bg-red-500/20 border-red-500/40 shadow-[0_0_30px_rgba(239,68,68,0.5)] transition-all duration-300";
     return "bg-white/5 border-white/10";
   };
 
   const getOrbColor = () => {
     if (isMuted) return "bg-gray-600";
-    if (status === "THINKING") return "bg-blue-400";
-    if (status === "ON_TRACK") return "bg-green-500";
+    if (status === "THINKING") return "bg-blue-400 animate-pulse";
+    if (isPerfect) return "bg-[#84cc16]";
     if (isSyntaxOff) return "bg-amber-500";
     if (isLogicOff) return "bg-red-500";
     return "bg-white/20";
@@ -45,7 +46,7 @@ export function FloatingOrb({ status, hint, isMuted, position, opacity = 1, onTo
     <motion.div 
       initial={false}
       animate={{
-        // Now it follows y but x is docked to the right margin from page.tsx props
+        // Docks smoothly to the right margin vertically aligned with current line
         x: position ? position.x : 0, 
         y: position ? position.y : 0,
         opacity: position ? opacity : 0
@@ -58,26 +59,35 @@ export function FloatingOrb({ status, hint, isMuted, position, opacity = 1, onTo
       <AnimatePresence>
         {showHint && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, x: 10 }}
+            initial={{ opacity: 0, scale: 0.9, x: 20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.9, x: 10 }}
-            className="pointer-events-auto bg-[#0a0a0a]/90 backdrop-blur-xl border border-white/5 p-3 rounded-2xl text-[11px] text-[#f5f5f5] font-medium min-w-[220px] shadow-2xl ring-1 ring-white/10"
+            exit={{ opacity: 0, scale: 0.9, x: 20 }}
+            className="pointer-events-auto bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl text-[12px] text-[#f5f5f5] font-medium min-w-[240px] shadow-2xl ring-1 ring-white/10"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${getOrbColor()}`} />
-              <span className={`uppercase text-[9px] font-black tracking-widest ${isSyntaxOff ? 'text-amber-500' : isLogicOff ? 'text-red-500' : 'text-green-500'}`}>
-                {isSyntaxOff ? "Syntax Warning" : isLogicOff ? "Logic Alert" : "Everything Correct"}
+            <div className="flex items-center gap-2 mb-3">
+              <div className={`w-2 h-2 rounded-full ${getOrbColor()} shadow-sm shadow-black`} />
+              <span 
+                className={`uppercase text-[10px] font-black tracking-[0.2em] 
+                ${isSyntaxOff ? 'text-amber-500' : isLogicOff ? 'text-red-500' : isPerfect ? 'text-[#84cc16]' : 'text-zinc-500'}`}
+              >
+                {isSyntaxOff ? "SYNTAX WARNING" : isLogicOff ? "LOGIC ALERT" : isPerfect ? "峰 FLOW STATE" : "SENTINEL LISTENING"}
               </span>
             </div>
-            <p className="leading-relaxed opacity-90">{hint}</p>
-            {isLogicOff && (
-              <button 
-                onClick={onClickHelp}
-                className="mt-3 w-full text-center py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors border border-white/5"
-              >
-                Reveal Deep Coaching
-              </button>
-            )}
+            
+            <div className="space-y-3">
+              <p className="leading-relaxed text-zinc-300 antialiased italic">
+                "{hint}"
+              </p>
+              
+              {isLogicOff && (
+                <button 
+                  onClick={onClickHelp}
+                  className="w-full text-center py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Retrieve Deep Coaching
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -86,36 +96,42 @@ export function FloatingOrb({ status, hint, isMuted, position, opacity = 1, onTo
         <motion.button
           onClick={onClickHelp}
           animate={{
-            scale: status === "THINKING" ? [1, 1.2, 1] : 1,
+            scale: status === "THINKING" ? [1, 1.25, 1] : 1,
             rotate: status === "THINKING" ? [0, 90, 180, 270, 360] : 0
           }}
           transition={{
             scale: { duration: 1, repeat: Infinity },
-            rotate: { duration: 3, repeat: Infinity, ease: "linear" }
+            rotate: { duration: 2.5, repeat: Infinity, ease: "linear" }
           }}
-          className={`relative w-8 h-8 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-700 overflow-hidden ${getStatusColor()} ${
-            (isSyntaxOff || isLogicOff) ? "cursor-help active:scale-95 shadow-lg" : "cursor-default"
+          className={`relative w-9 h-9 rounded-full border backdrop-blur-md flex items-center justify-center transition-all duration-700 overflow-hidden ${getStatusColor()} ${
+            (isSyntaxOff || isLogicOff) ? "cursor-help active:scale-95 shadow-xl" : "cursor-default border-indigo-500/10"
           }`}
         >
-          {/* Internal Bioluminescent Core */}
+          {/* Bioluminescent Micro-Core */}
           <motion.div 
             animate={{
-              boxShadow: (isSyntaxOff || isLogicOff) ? `0 0 15px ${isSyntaxOff ? '#f59e0b' : '#ef4444'}` : "none"
+              boxShadow: (isSyntaxOff || isLogicOff) ? `0 0 20px ${isSyntaxOff ? '#f59e0b' : '#ef4444'}` : "none",
+              scale: isPerfect ? [1, 1.1, 1] : 1
             }}
-            className={`w-1.5 h-1.5 rounded-full relative z-10 ${getOrbColor()}`}
+            className={`w-2 h-2 rounded-full relative z-10 ${getOrbColor()} shadow-sm shadow-black`}
           />
 
-          {/* Mute Reveal Toggle */}
+          {/* Mute Panel Reveal */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleMute();
             }}
-            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 bg-black/60 rounded-full"
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 bg-black/70 rounded-full"
           >
-            <span className="text-[10px]">{isMuted ? "🔈" : "🔇"}</span>
+            <span className="text-[10px] filter invert grayscale">{isMuted ? "🔈" : "🔇"}</span>
           </button>
         </motion.button>
+        
+        {/* Glow Halo for Critical Error */}
+        {isLogicOff && !isMuted && (
+          <div className="absolute inset-x-0 inset-y-0 rounded-full animate-ping pointer-events-none opacity-10 bg-red-500 scale-150" />
+        )}
       </div>
     </motion.div>
   );
