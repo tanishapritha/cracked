@@ -104,7 +104,7 @@ export default function CoachPage() {
       const recentLines = lines.length > 30 ? lines.slice(-30).join('\n') : code;
       
       sendToCoach("[BACKGROUND_CHECK]", "CODING", recentLines);
-    }, 3000); // High-octane pulse every 3s of idle time
+    }, 10000); // 10s gap to save Free-Tier tokens🥂🚀
 
     return () => clearTimeout(pulseInterval);
   }, [code, isStreaming, sessionEnded, mode, isMuted, localErrorHint]);
@@ -620,7 +620,7 @@ export default function CoachPage() {
               status={isThinking ? "THINKING" : trackStatus === "ON_TRACK" ? "ON_TRACK" : trackStatus === "OFF_TRACK" ? "OFF_TRACK" : "IDLE"}
               hint={localErrorHint || lastSilentHint}
               isMuted={isMuted}
-              position={cursorPos}
+              position={cursorPos || undefined}
               opacity={isTyping ? 0.3 : 1}
               onToggleMute={() => saveMute(!isMuted)}
               onClickHelp={() => {
@@ -670,49 +670,33 @@ export default function CoachPage() {
             )}
 
             <div className="space-y-4">
-              <label className="text-[10px] font-black uppercase tracking-widest text-[#525252] block ml-1">
-                Your API Key (OpenRouter)
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#84cc16] block ml-1">
+                Your Groq (GSK) Key
               </label>
               <input
                 type="password"
                 value={userApiKey}
                 onChange={(e) => saveUserKey(e.target.value)}
-                placeholder="sk-or-v1-..."
+                placeholder="gsk_..."
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] p-3 rounded-lg text-sm text-white placeholder:text-[#262626] focus:outline-none focus:border-[#84cc16]/40 transition-all font-mono"
               />
               <p className="text-[9px] text-[#404040] leading-relaxed px-1 text-center">
-                Your key is stored locally in your browser. It never leaves your device except to fetch AI responses.
+                Stored locally in your browser. Used for high-speed Llama 3.3 diagnostics.
               </p>
             </div>
 
             <div className="pt-4 space-y-3">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-[#525252] ml-1">
-                Don't have a key? Get one free:
+                Get a free key here:
               </h4>
               <div className="grid grid-cols-1 gap-2">
                 <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
-                >
-                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">Google Gemini</span>
-                  <span className="text-[10px] font-black text-[#84cc16]">FREE ↗</span>
-                </a>
-                <a 
                   href="https://console.groq.com/keys" 
                   target="_blank" 
-                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
+                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#84cc16]/50 transition-all group"
                 >
-                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">Groq AI</span>
+                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white uppercase tracking-widest">Get Groq (GSK) Key</span>
                   <span className="text-[10px] font-black text-[#84cc16]">FAST ↗</span>
-                </a>
-                <a 
-                  href="https://openrouter.ai/keys" 
-                  target="_blank" 
-                  className="flex items-center justify-between p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg hover:border-[#333] transition-all group"
-                >
-                  <span className="text-xs font-bold text-[#d4d4d4] group-hover:text-white">OpenRouter</span>
-                  <span className="text-[10px] font-black text-[#84cc16]">HUB ↗</span>
                 </a>
               </div>
             </div>

@@ -19,48 +19,57 @@ export async function POST(req: NextRequest) {
     const problem = getProblemBySlug(problem_slug);
     if (!problem) return new Response("Problem not found", { status: 404 });
 
-    // --- GEMINI NATIVE CONFIG ---
-    let apiKey = user_key?.trim() || process.env.ANTHROPIC_API_KEY; 
+    // --- STRICT KEY LOCKING ---
+    // If user provides a key, we ONLY use that. No shared pool interference.
+    const isUserKey = !!(user_key && user_key.trim().length > 10);
+    const apiKey = isUserKey ? user_key.trim() : process.env.GROQ_API_KEY; 
     
-    if (!apiKey) return new Response("Key Required. Plug in Gemini Key in settings.", { status: 401 });
+    if (!apiKey) {
+      return new Response("GSK Key Missing. Please plug in your Groq key.", { status: 401 });
+    }
 
-    // Official Google REST Endpoint (v1beta)
-    // Using streamGenerateContent for best stability
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key=${apiKey}`;
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+    const model = "llama-3.3-70b-versatile";
 
-    const systemPrompt = `Analyze this code for "${problem.title}". 
+    // --- LITE PROMPT FOR PULSE SAVINGS ---
+    const systemPrompt = `Review code for "${problem.title}". 
 Mode: ${mode || 'CODING'}
-Hint Level: ${hint_level || 1}
-Start response with [STATUS: ON_TRACK] or [STATUS: OFF_TRACK].
-${is_silent ? "Silent pulse mode: 5-word diagnostic max. No conversation." : "Coaching mode: 2 sentences max. Focus on hints not answers."}
+Rules:
+- NO ANSWERS.
+- 2 sentence hints max.
+- Always start with [STATUS: ON_TRACK] or [STATUS: OFF_TRACK].
+${is_silent ? "SILENT MODE: ONLY status tag + 3-word reason." : ""}
 
-${code ? `Current code:\n${code}` : ""}
+${code ? `User Code:\n${code}` : ""}
 `;
 
-    // Map history to Google's contents format
-    const contents = [
-      {
-        role: "user",
-        parts: [{ text: `[COACH GUIDELINES]: ${systemPrompt}\n\nExisting chat:\n${messages.map((m: any) => `${m.role === 'coach' ? 'Assistant' : 'User'}: ${m.content}`).join('\n')}` }]
-      }
+    const llmMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.map((m: any) => ({
+        role: m.role === "coach" ? "assistant" : "user",
+        content: m.content,
+      })),
     ];
 
     const response = await fetch(apiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        contents,
-        generationConfig: {
-          maxOutputTokens: 512,
-          temperature: 0.7,
-        }
+        model,
+        messages: llmMessages,
+        stream: true,
+        max_tokens: is_silent ? 50 : 512, // Save tokens for pulses
+        temperature: 0.5,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[GEMINI ERROR]", errorText);
-      return new Response(`Gemini Unavailable: ${errorText}`, { status: response.status });
+      // Pass through the exact error to help the user debug their key
+      return new Response(errorText, { status: response.status });
     }
 
     const encoder = new TextEncoder();
@@ -75,25 +84,16 @@ ${code ? `Current code:\n${code}` : ""}
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            
-            // Google's stream chunks are often JSON arrays [ ... ]
-            // We need to parse them carefully
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
             for (const line of lines) {
-              if (line.trim().startsWith('"text": "')) {
-                // Extremely simple extraction for speed
-                const match = line.match(/"text":\s*"(.*)"/);
-                if (match && match[1]) {
-                  const cleaned = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                  controller.enqueue(encoder.encode(cleaned));
-                }
-              } else {
-                // Secondary fallback for raw content parts
+              if (line.trim().startsWith("data: ")) {
+                const data = line.slice(6).trim();
+                if (data === "[DONE]") continue;
                 try {
-                  const json = JSON.parse(line.replace(/,$/, '').trim());
-                  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-                  if (text) controller.enqueue(encoder.encode(text));
+                  const json = JSON.parse(data);
+                  const content = json.choices?.[0]?.delta?.content;
+                  if (content) controller.enqueue(encoder.encode(content));
                 } catch {}
               }
             }
@@ -103,7 +103,11 @@ ${code ? `Current code:\n${code}` : ""}
         }
       },
     }), {
-      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" },
+      headers: { 
+        "Content-Type": "text/plain; charset=utf-8", 
+        "Cache-Control": "no-cache",
+        "X-Key-Source": isUserKey ? "user" : "system" // Let us know which was used
+      },
     });
   } catch (err) {
     return new Response("Internal server error", { status: 500 });
