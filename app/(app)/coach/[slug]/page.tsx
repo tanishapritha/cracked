@@ -594,12 +594,12 @@ export default function CoachPage() {
                 // Initial scan
                 const pos = editor.getPosition();
                 if (pos) {
-                  const viewPos = editor.getScrolledVisiblePosition(pos);
-                  if (viewPos) setCursorPos({ x: viewPos.left, y: viewPos.top - 10 });
+                  const viewPos = (editor as any).getScrolledVisiblePosition(pos);
+                  if (viewPos) setCursorPos({ x: viewPos.left, y: viewPos.top });
                 }
 
                 editor.onDidChangeCursorPosition((e: any) => {
-                  const position = editor.getScrolledVisiblePosition(e.position);
+                  const position = (editor as any).getScrolledVisiblePosition(e.position);
                   const layout = editor.getLayoutInfo();
                   if (position && layout) {
                     // Anchor to the RIGHT side of the editor
