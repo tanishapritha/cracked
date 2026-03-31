@@ -118,15 +118,20 @@ export default function CoachPage() {
       const model = editorRef.current.getModel();
       if (!model) return;
       
-      // @ts-ignore
-      const markers = editorRef.current._codeEditorService?.window.monaco?.editor.getModelMarkers({ resource: model.uri }) 
-                       || (window as any).monaco?.editor.getModelMarkers({ resource: model.uri });
-
-      if (markers && markers.length > 0) {
-        setLocalErrorHint(`${markers[0].message} (Local)`);
-        setTrackStatus("OFF_TRACK");
-      } else {
-        setLocalErrorHint(null);
+      try {
+        // @ts-ignore
+        const windowMonaco = (window as any).monaco;
+        if (windowMonaco) {
+          const markers = windowMonaco.editor.getModelMarkers({ resource: model.uri });
+          if (markers && markers.length > 0) {
+            setLocalErrorHint(`${markers[0].message} (Local)`);
+            setTrackStatus("OFF_TRACK");
+          } else {
+            setLocalErrorHint(null);
+          }
+        }
+      } catch (err) {
+        console.warn("Syntax check failed silently", err);
       }
     }, 500);
 
@@ -595,8 +600,10 @@ export default function CoachPage() {
 
                 editor.onDidChangeCursorPosition((e: any) => {
                   const position = editor.getScrolledVisiblePosition(e.position);
-                  if (position) {
-                    setCursorPos({ x: position.left, y: position.top });
+                  const layout = editor.getLayoutInfo();
+                  if (position && layout) {
+                    // Anchor to the RIGHT side of the editor
+                    setCursorPos({ x: layout.width - 60, y: position.top });
                   }
                 });
               }}
